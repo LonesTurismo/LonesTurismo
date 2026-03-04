@@ -8,9 +8,11 @@
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><img class="logo" src="img/logo-lones.png" alt="LonesTur"></div>
+ <a href="index.html" class="logo-link">
+  <img src="img/logo-lones.png" alt="Lones Turismo">
+</a>
   <nav class="menu">
-    <a href="LonesTur.html">Início</a>
+    <a href="index.html">Início</a>
     <a class="active" href="cadastro.html">Lançar Lista</a>
     <a href="editar.html">Editar Lista</a>
     <a href="admin.html">Admin</a>
@@ -20,7 +22,7 @@
 <main class="page">
   <div class="container wide">
     <div class="card">
-      <h2 style="margin:0 0 8px 0;">Criar Viagem (gera ID + PIN)</h2>
+      <h2 style="margin:0 0 8px 0;">Adicione os dados para enviar a lista de viagem.</h2>
       <div class="grid-3">
         <div>
           <label>Destino</label>
@@ -45,19 +47,19 @@
     </div>
 
     <div class="card">
-      <h2 style="margin:0 0 8px 0;">Adicionar Passageiro (Individual)</h2>
+      <h2 style="margin:0 0 8px 0;">Adicionar Passageiro</h2>
       <div class="grid-4">
         <div>
-          <label>Nome (100)</label>
+          <label>Nome</label>
           <input id="pName" maxlength="100"/>
         </div>
         <div>
-          <label>CPF (11 dígitos)</label>
+          <label>CPF</label>
           <input id="pCpf" maxlength="14" placeholder="000.000.000-00"/>
         </div>
         <div>
-          <label>Telefone (13)</label>
-          <input id="pPhone" maxlength="13" placeholder="(xx) xxxxx-xxxx"/>
+          <label>Telefone</label>
+          <input id="pPhone" maxlength="11" placeholder="(xx) xxxxx-xxxx"/>
         </div>
         <div>
           <label>Docs (até 4)</label>

@@ -14,7 +14,7 @@ body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg)}
   padding:14px 24px;box-shadow:0 2px 10px rgba(0,0,0,.08)
 }
 .brand{display:flex;gap:12px;align-items:center}
-.logo{height:44px}
+.logo{height:90px}
 .menu a{
   text-decoration:none;color:var(--blue);font-weight:800;padding:8px 10px;border-radius:8px
 }
@@ -48,3 +48,14 @@ input,select{
 @media(max-width:900px){.pass-grid{grid-template-columns:1fr}}
 .small{color:var(--muted);font-size:12px}
 .badge{display:inline-block;padding:4px 8px;border:1px solid var(--border);border-radius:999px;font-weight:800;color:var(--blue);background:#fff}
+
+.logo-link {
+  display: inline-block;
+  text-decoration: none;
+}
+
+.logo-link img {
+  height: 90px;
+  width: auto;
+  display: block;
+}

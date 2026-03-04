@@ -1,5 +1,5 @@
 {
   "routes": [
-    { "src": "/", "dest": "/frontend/LonesTur.html" }
+    { "src": "/", "dest": "/frontend/index.html" }
   ]
 }

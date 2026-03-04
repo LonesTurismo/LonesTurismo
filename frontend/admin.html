@@ -8,9 +8,11 @@
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><img class="logo" src="img/logo-lones.png" alt="LonesTur"></div>
+  <a href="index.html" class="logo-link">
+  <img src="img/logo-lones.png" alt="Lones Turismo">
+</a>
   <nav class="menu">
-    <a href="LonesTur.html">Início</a>
+    <a href="index.html">Início</a>
     <a href="cadastro.html">Lançar Lista</a>
     <a href="editar.html">Editar Lista</a>
     <a class="active" href="admin.html">Admin</a>
@@ -23,14 +25,14 @@
       <h2 style="margin:0 0 8px 0;">Login Administrativo</h2>
 
       <label>Usuário</label>
-      <input id="admUser" value="adm"/>
+      <input id="admUser" value=""/>
 
       <label>Senha</label>
-      <input id="admPass" type="password" value="Se"/>
+      <input id="admPass" type="password" value=""/>
 
       <div class="row">
         <button class="btn primary" id="btnAdminLogin">Entrar</button>
-        <a class="btn" href="LonesTur.html">Voltar</a>
+        <a class="btn" href="admin.html">Voltar</a>
       </div>
 
       <div id="admError" class="error"></div>

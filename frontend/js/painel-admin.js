@@ -1,26 +1,12 @@
-// frontend/js/painel-admin.js
-// Painel Admin (abas por viagem) - usa adminToken salvo no localStorage
-
-const API = "https://lonesturismo.onrender.com"; 
-// Para testar LOCAL, troque para:  const API = "http://localhost:3001";
-
-let viagemSelecionada = null;
-
-const tabsEl = document.getElementById("tabs");
-const tbodyEl = document.getElementById("tbody");
-const tituloEl = document.getElementById("viagemTitulo");
-const infoEl = document.getElementById("viagemInfo");
-
-const btnZip = document.getElementById("btnZip");
-const btnApagar = document.getElementById("btnApagar");
+const API = "https://lonesturismo.onrender.com";
 
 function getAdminToken() {
   return localStorage.getItem("adminToken");
 }
 
-function getAuthHeaders() {
-  const token = getAdminToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+function authHeaders() {
+  const t = getAdminToken();
+  return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
 async function fetchJSON(url, options = {}) {
@@ -28,42 +14,28 @@ async function fetchJSON(url, options = {}) {
     ...options,
     headers: {
       ...(options.headers || {}),
-      ...getAuthHeaders(),
+      ...authHeaders(),
     },
   });
-
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
-    throw new Error(txt || `Erro HTTP ${res.status}`);
+    throw new Error(txt || `HTTP ${res.status}`);
   }
   return res.json();
 }
 
-// Download com Authorization (porque window.open não envia headers)
-async function downloadZipComToken(url, fallbackFilename = "viagem.zip") {
-  const token = getAdminToken();
-  if (!token) {
-    alert("Você não está logado. Faça login em Admin.");
-    window.location.href = "admin.html";
-    return;
-  }
-
-  const res = await fetch(url, {
-    method: "GET",
-    headers: { ...getAuthHeaders() },
-  });
-
+async function downloadWithAuth(url, fallbackName = "viagem.zip") {
+  const res = await fetch(url, { headers: { ...authHeaders() } });
   if (!res.ok) {
     const txt = await res.text().catch(() => "");
-    throw new Error(txt || `Falha no download (HTTP ${res.status})`);
+    throw new Error(txt || `HTTP ${res.status}`);
   }
 
-  // tenta pegar nome do arquivo pelo header
-  let filename = fallbackFilename;
+  let filename = fallbackName;
   const cd = res.headers.get("content-disposition");
   if (cd) {
-    const match = cd.match(/filename="([^"]+)"/i);
-    if (match && match[1]) filename = match[1];
+    const m = cd.match(/filename="([^"]+)"/i);
+    if (m?.[1]) filename = m[1];
   }
 
   const blob = await res.blob();
@@ -79,127 +51,109 @@ async function downloadZipComToken(url, fallbackFilename = "viagem.zip") {
   URL.revokeObjectURL(blobUrl);
 }
 
-function setButtons(enabled) {
-  btnZip.disabled = !enabled;
-  btnApagar.disabled = !enabled;
-}
+const tabsEl = document.getElementById("tabs");
+const tbodyEl = document.getElementById("tbody");
+const tituloEl = document.getElementById("viagemTitulo");
+const infoEl = document.getElementById("viagemInfo");
+const btnZip = document.getElementById("btnZip");
+const btnApagar = document.getElementById("btnApagar");
 
-function renderPassageiros(passageiros) {
-  if (!passageiros.length) {
+let selectedTripId = null;
+
+function renderPassengers(list) {
+  if (!list.length) {
     tbodyEl.innerHTML = `<tr><td colspan="3" class="muted">Nenhum passageiro cadastrado.</td></tr>`;
     return;
   }
 
-  tbodyEl.innerHTML = passageiros
+  tbodyEl.innerHTML = list
     .map(
       (p) => `
       <tr>
-        <td>${p.nome ?? ""}</td>
-        <td>${p.documento ?? ""}</td>
-        <td>${p.telefone ?? ""}</td>
+        <td>${p.name ?? ""}</td>
+        <td>${p.cpf ?? ""}</td>
+        <td>${p.phone ?? ""}</td>
       </tr>
     `
     )
     .join("");
 }
 
-async function carregarPassageiros(viagem) {
-  viagemSelecionada = viagem;
-  setButtons(true);
+async function selectTrip(trip) {
+  selectedTripId = trip.id;
 
-  const titulo = viagem.titulo || `Viagem #${viagem.id}`;
-  tituloEl.textContent = titulo;
+  tituloEl.textContent = `${trip.destination}`;
+  infoEl.textContent = `ID: ${trip.id} • Saída: ${trip.date_iso} • Resp: ${trip.responsible}`;
 
-  const data = viagem.data_saida ? ` • Saída: ${viagem.data_saida}` : "";
-  const status = viagem.status ? ` • ${viagem.status}` : "";
-  infoEl.textContent = `ID: ${viagem.id}${data}${status}`;
+  const data = await fetchJSON(`${API}/api/admin/trips/${trip.id}/passengers`);
+  renderPassengers(data.passengers || []);
 
-  const passageiros = await fetchJSON(`${API}/api/viagens/${viagem.id}/passageiros`);
-  renderPassageiros(passageiros);
+  btnZip.disabled = false;
+  btnApagar.disabled = false;
 }
 
-function renderTabs(viagens) {
+function renderTabs(trips) {
   tabsEl.innerHTML = "";
 
-  if (!viagens.length) {
+  if (!trips.length) {
     tituloEl.textContent = "Nenhuma viagem cadastrada";
     infoEl.textContent = "";
-    setButtons(false);
-    tbodyEl.innerHTML = `<tr><td colspan="3" class="muted">Cadastre uma viagem para começar.</td></tr>`;
+    renderPassengers([]);
+    btnZip.disabled = true;
+    btnApagar.disabled = true;
     return;
   }
 
-  viagens.forEach((v, idx) => {
-    const btn = document.createElement("button");
-    btn.className = "tab" + (idx === 0 ? " active" : "");
-    btn.textContent = v.titulo || `Viagem ${v.id}`;
-
-    btn.onclick = async () => {
-      document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
-      btn.classList.add("active");
-      try {
-        await carregarPassageiros(v);
-      } catch (e) {
-        console.error(e);
-        tbodyEl.innerHTML = `<tr><td colspan="3" class="muted">Erro ao carregar passageiros.</td></tr>`;
-      }
+  trips.forEach((t, idx) => {
+    const b = document.createElement("button");
+    b.className = "tab" + (idx === 0 ? " active" : "");
+    b.textContent = `${t.destination} (${t.id})`;
+    b.onclick = async () => {
+      document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+      b.classList.add("active");
+      await selectTrip(t);
     };
-
-    tabsEl.appendChild(btn);
+    tabsEl.appendChild(b);
   });
 
-  carregarPassageiros(viagens[0]).catch((e) => {
-    console.error(e);
-    tbodyEl.innerHTML = `<tr><td colspan="3" class="muted">Erro ao carregar dados.</td></tr>`;
-  });
+  selectTrip(trips[0]).catch(console.error);
 }
 
 btnZip.onclick = async () => {
-  if (!viagemSelecionada) return;
-
+  if (!selectedTripId) return;
   try {
-    await downloadZipComToken(
-      `${API}/api/viagens/${viagemSelecionada.id}/export/zip`,
-      `viagem_${viagemSelecionada.id}.zip`
-    );
+    await downloadWithAuth(`${API}/api/exports/${selectedTripId}/zip`, `viagem_${selectedTripId}.zip`);
   } catch (e) {
-    console.error(e);
-    alert(`Falha ao exportar ZIP: ${e.message}`);
+    alert("Falha ao baixar ZIP: " + e.message);
   }
 };
 
 btnApagar.onclick = async () => {
-  if (!viagemSelecionada) return;
-
-  const ok = confirm("Confirmar: apagar passageiros e documentos do banco após exportar?");
+  if (!selectedTripId) return;
+  const ok = confirm("Isso vai APAGAR a viagem e todos os passageiros/documentos. Confirma?");
   if (!ok) return;
 
   try {
-    await fetchJSON(`${API}/api/viagens/${viagemSelecionada.id}/passageiros`, {
-      method: "DELETE",
-    });
-
-    renderPassageiros([]);
-    alert("Apagado com sucesso.");
+    await fetchJSON(`${API}/api/admin/trips/${selectedTripId}/purge`, { method: "DELETE" });
+    alert("Apagado com sucesso. Recarregue a página.");
+    window.location.reload();
   } catch (e) {
-    console.error(e);
-    alert("Falha ao apagar. Verifique login/token.");
+    alert("Falha ao apagar: " + e.message);
   }
 };
 
 (async function init() {
-  // precisa estar logado
-  if (!getAdminToken()) {
+  const token = getAdminToken();
+  if (!token) {
     window.location.href = "admin.html";
     return;
   }
 
   try {
-    setButtons(false);
-    const viagens = await fetchJSON(`${API}/api/viagens`);
-    renderTabs(viagens);
+    const data = await fetchJSON(`${API}/api/admin/trips`);
+    renderTabs(data.trips || []);
   } catch (e) {
     console.error(e);
-    tbodyEl.innerHTML = `<tr><td colspan="3" class="muted">Erro ao carregar viagens (verifique login/token).</td></tr>`;
+    alert("Erro ao carregar painel: " + e.message);
   }
 })();

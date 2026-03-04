@@ -1,10 +1,10 @@
 // ✅ Render backend
 const API = "https://lonesturismo.onrender.com";
-document.addEventListener("DOMContentLoaded", () => {
-// acorda o servidor
-fetch(API + "/health").catch(()=>{});
-// aquece o servidor
 
+// acorda o servidor (reduz delay do primeiro clique)
+document.addEventListener("DOMContentLoaded", () => {
+  fetch(`${API}/health`).catch(() => {});
+});
 // ---------- helpers ----------
 function onlyDigits(s = "") { return String(s).replace(/\D/g, ""); }
 function formatCPF(cpf) {

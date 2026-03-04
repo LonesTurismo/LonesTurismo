@@ -1,4 +1,4 @@
-const API = "https://lonesturismo.onrender.com";
+const API = "";
 
 function getAdminToken() {
   return localStorage.getItem("adminToken");

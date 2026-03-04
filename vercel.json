@@ -3,3 +3,9 @@
     { "src": "/", "dest": "/frontend/index.html" }
   ]
 }
+{
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://lonesturismo.onrender.com/api/$1" },
+    { "source": "/health", "destination": "https://lonesturismo.onrender.com/health" }
+  ]
+}

@@ -8,7 +8,7 @@ import archiver from "archiver";
 import fetch from "node-fetch";
 import path from "path";
 import { fileURLToPath } from "url";
-
+import { loginAdmin } from "./admin-login.js";
 import sqlite3 from "sqlite3";
 import { open } from "sqlite";
 
@@ -46,6 +46,8 @@ const db = await open({
   filename: DB_PATH,
   driver: sqlite3.Database,
 });
+
+app.post("/api/admin/login", loginAdmin);
 
 // =====================
 // AUTH ADMIN (JWT)

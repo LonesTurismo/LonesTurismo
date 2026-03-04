@@ -1,13 +1,9 @@
 // ✅ Render backend
 const API = "https://lonesturismo.onrender.com";
 document.addEventListener("DOMContentLoaded", () => {
-
-  const API = "https://lonesturismo.onrender.com";
-
-  // acorda o servidor
-  fetch(API + "/health").catch(()=>{});
-
-});
+// acorda o servidor
+fetch(API + "/health").catch(()=>{});
+// aquece o servidor
 
 // ---------- helpers ----------
 function onlyDigits(s = "") { return String(s).replace(/\D/g, ""); }
@@ -34,13 +30,6 @@ function getTripSession() {
 function getAdminToken() { return localStorage.getItem("adminToken"); }
 function setAdminToken(t) { localStorage.setItem("adminToken", t); }
 function clearAdminToken() { localStorage.removeItem("adminToken"); }
-
-const API = "https://lonesturismo.onrender.com";
-
-// aquece o servidor
-fetch(API + "/health")
-  .then(() => console.log("Servidor acordado"))
-  .catch(() => console.log("Servidor ainda acordando"));
 
 // ---------- cadastro (criar viagem) ----------
 async function createTrip() {

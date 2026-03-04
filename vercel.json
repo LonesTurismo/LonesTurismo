@@ -1,22 +1,8 @@
 {
-  "routes": [
-    { "src": "/", "dest": "/frontend/index.html" }
-  ]
-}
-{
   "rewrites": [
-    { "source": "/", "destination": "/frontend/index.html" },
-
-    { "source": "/admin.html", "destination": "/frontend/admin.html" },
-    { "source": "/painel.html", "destination": "/frontend/painel.html" },
-    { "source": "/cadastro.html", "destination": "/frontend/cadastro.html" },
-    { "source": "/editar.html", "destination": "/frontend/editar.html" },
-
-    { "source": "/css/(.*)", "destination": "/frontend/css/$1" },
-    { "source": "/js/(.*)", "destination": "/frontend/js/$1" },
-    { "source": "/img/(.*)", "destination": "/frontend/img/$1" },
-
     { "source": "/api/(.*)", "destination": "https://lonesturismo.onrender.com/api/$1" },
-    { "source": "/health", "destination": "https://lonesturismo.onrender.com/health" }
+    { "source": "/health", "destination": "https://lonesturismo.onrender.com/health" },
+
+    { "source": "/(.*)", "destination": "/frontend/$1" }
   ]
 }

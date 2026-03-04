@@ -3,7 +3,9 @@ const API = "";
 
 // acorda o servidor (reduz delay do primeiro clique)
 document.addEventListener("DOMContentLoaded", () => {
-  fetch(`${API}/health`).catch(() => {});
+  fetch(`${API}/api/admin/login`)
+fetch(`${API}/api/admin/trips`)
+fetch(`${API}/health`)
 });
 // ---------- helpers ----------
 function onlyDigits(s = "") { return String(s).replace(/\D/g, ""); }

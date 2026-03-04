@@ -1,5 +1,13 @@
 // ✅ Render backend
 const API = "https://lonesturismo.onrender.com";
+document.addEventListener("DOMContentLoaded", () => {
+
+  const API = "https://lonesturismo.onrender.com";
+
+  // acorda o servidor
+  fetch(API + "/health").catch(()=>{});
+
+});
 
 // ---------- helpers ----------
 function onlyDigits(s = "") { return String(s).replace(/\D/g, ""); }

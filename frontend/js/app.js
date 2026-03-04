@@ -1,5 +1,5 @@
 // ✅ Render backend
-const API = "https://lonesturismo.onrender.com";
+const API = "";
 
 // acorda o servidor (reduz delay do primeiro clique)
 document.addEventListener("DOMContentLoaded", () => {

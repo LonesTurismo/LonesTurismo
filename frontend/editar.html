@@ -1,48 +1,87 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-br">
 <head>
-<meta charset="UTF-8">
-<title>Dados do Passageiro</title>
-<link rel="stylesheet" href="css/style.css">
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Editar Lista</title>
+  <link rel="stylesheet" href="css/style.css"/>
 </head>
 <body>
-
-<header>
-  <div class="logo">
-    <img src="img/logo-lones.png">
-  </div>
-  <nav>
+<header class="topbar">
+  <div class="brand"><img class="logo" src="img/logo-lones.png" alt="LonesTur"></div>
+  <nav class="menu">
     <a href="LonesTur.html">Início</a>
-    <a href="destino.html">Solicitar Viagem</a>
+    <a href="cadastro.html">Lançar Lista</a>
+    <a class="active" href="editar.html">Editar Lista</a>
+    <a href="admin.html">Admin</a>
   </nav>
 </header>
 
-<div class="container-grupo">
-<h2>Dados do Passageiro</h2>
+<main class="page">
+  <div class="container wide">
+    <div class="card">
+      <h2 style="margin:0 0 8px 0;">Acessar Viagem por ID + PIN</h2>
+      <div class="grid-3">
+        <div>
+          <label>ID da Viagem</label>
+          <input id="editTripId" placeholder="Ex.: GOI-20260320-01"/>
+        </div>
+        <div>
+          <label>PIN</label>
+          <input id="editPin" maxlength="4" placeholder="0000"/>
+        </div>
+        <div style="display:flex;align-items:flex-end;justify-content:flex-end;">
+          <button class="btn primary" id="btnLoadTrip">Carregar</button>
+        </div>
+      </div>
 
-<div class="tabs">
-  <button onclick="mostrarIndividual()">Um Passageiro</button>
-  <button onclick="mostrarTurma()">Turma (Grupo)</button>
-</div>
+      <div class="row">
+        <button class="btn" id="btnCopyLinkPin" type="button">Copiar link + PIN</button>
+      </div>
+      <div id="editError" class="error"></div>
+    </div>
 
-<!-- INDIVIDUAL -->
-<div id="individual">
-  <input type="text" id="nome" maxlength="100" placeholder="Nome completo">
-  <input type="text" id="cpf" maxlength="10" placeholder="CPF (10 dígitos)">
-  <input type="text" placeholder="Telefone" maxlength="11" placeholder="Número de contato">
-  <input type="file" id="docs" multiple accept=".jpg,.jpeg,.png">
-  <button onclick="enviarIndividual()">Enviar</button>
-</div>
+    <div class="card" id="editArea" style="display:none;">
+      <div class="row" style="justify-content:space-between;">
+        <div>
+          <h3 id="tripHeader" style="margin:0;"></h3>
+          <div class="hint" id="tripHint"></div>
+        </div>
+        <a class="btn" href="LonesTur.html">Voltar</a>
+      </div>
+      <div class="divider"></div>
 
-<!-- TURMA -->
-<div id="turma" style="display:none;">
-  <div id="listaPassageiros"></div>
-  <button onclick="adicionarPassageiro()">+ Adicionar Passageiro</button>
-  <button onclick="enviarTurma()">Enviar Turma</button>
-</div>
+      <div class="card" style="border-style:dashed;">
+        <h3 style="margin:0 0 8px 0;">Adicionar Passageiro</h3>
+        <div class="grid-4">
+          <div>
+            <label>Nome</label>
+            <input id="newName" maxlength="100"/>
+          </div>
+          <div>
+            <label>CPF</label>
+            <input id="newCpf" maxlength="14" placeholder="000.000.000-00"/>
+          </div>
+          <div>
+            <label>Telefone (13)</label>
+            <input id="newPhone" maxlength="13"/>
+          </div>
+          <div>
+            <label>Docs (até 4)</label>
+            <input id="newDocs" type="file" multiple accept=".jpg,.jpeg,.png"/>
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn primary" id="btnCreatePassenger">Adicionar</button>
+        </div>
+      </div>
 
-</div>
+      <h3 style="margin:0 0 10px 0;">Passageiros</h3>
+      <div id="passList"></div>
+    </div>
+  </div>
+</main>
 
-<script src="js/script.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>

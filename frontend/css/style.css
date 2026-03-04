@@ -1,132 +1,50 @@
-body{
-font-family: Arial;
-margin:0;
-background:#f4f6f9;
+:root{
+  --blue:#0d3b78;
+  --bg:#f4f6f9;
+  --card:#fff;
+  --border:#e5e7eb;
+  --muted:#64748b;
+  --danger:#b91c1c;
 }
 
-header{
-display:flex;
-justify-content:space-between;
-align-items:center;
-padding:15px 40px;
-background:white;
-box-shadow:0 2px 10px rgba(0,0,0,0.1);
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg)}
+.topbar{
+  background:#fff;display:flex;justify-content:space-between;align-items:center;
+  padding:14px 24px;box-shadow:0 2px 10px rgba(0,0,0,.08)
 }
-
-nav a{
-margin:0 10px;
-text-decoration:none;
-color:#003366;
-font-weight:bold;
+.brand{display:flex;gap:12px;align-items:center}
+.logo{height:44px}
+.menu a{
+  text-decoration:none;color:var(--blue);font-weight:800;padding:8px 10px;border-radius:8px
 }
-
-.hero{
-height:80vh;
-display:flex;
-flex-direction:column;
-justify-content:center;
-align-items:center;
-background:linear-gradient(to right,#003366,#cc0000);
-color:white;
-text-align:center;
+.menu a.active,.menu a:hover{background:#eaf1ff}
+.page{padding:26px}
+.container{max-width:820px;margin:0 auto}
+.container.wide{max-width:1150px}
+.card{
+  background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;
+  box-shadow:0 8px 18px rgba(0,0,0,.06);margin-bottom:16px
 }
-
+label{display:block;font-weight:800;margin-top:10px;margin-bottom:6px}
+input,select{
+  width:100%;padding:12px;border:1px solid var(--border);border-radius:10px
+}
+.row{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
 .btn{
-background:#cc0000;
-padding:15px 30px;
-color:white;
-text-decoration:none;
-border-radius:8px;
+  border:1px solid var(--border);background:#fff;padding:10px 14px;border-radius:10px;
+  font-weight:800;cursor:pointer;text-decoration:none;display:inline-block
 }
-
-.container{
-max-width:600px;
-margin:60px auto;
-background:white;
-padding:30px;
-border-radius:10px;
-box-shadow:0 5px 20px rgba(0,0,0,0.1);
-}
-
-.container-grupo{
-max-width:1100px;
-margin:60px auto;
-background:white;
-padding:30px;
-border-radius:10px;
-box-shadow:0 5px 20px rgba(0,0,0,0.1);
-}
-
-input{
-width:100%;
-padding:12px;
-margin:10px 0;
-border-radius:8px;
-border:1px solid #ccc;
-}
-
-button{
-background:#cc0000;
-color:white;
-border:none;
-padding:12px;
-margin-top:10px;
-border-radius:8px;
-cursor:pointer;
-}
-
-table{
-width:100%;
-margin-top:20px;
-border-collapse:collapse;
-}
-
-th,td{
-padding:10px;
-border-bottom:1px solid #ddd;
-}
-
-.logo img{
-    height:80px;
-    width:auto;
-}
-
-.btn-voltar{
-    display:inline-block;
-    margin:20px;
-    text-decoration:none;
-    background:#003366;
-    color:white;
-    padding:10px 20px;
-    border-radius:6px;
-}
-
-.linha-passageiro{
-display:flex;
-gap:10px;
-margin-bottom:10px;
-}
-
-.linha-passageiro input{
-flex:1;
-}
-
-.upload-btn{
-background:#003366;
-color:white;
-padding:8px 15px;
-border-radius:6px;
-cursor:pointer;
-display:inline-block;
-}
-
-.upload-btn input{
-display:none;
-}
-
-.nome-arquivo{
-font-size:12px;
-color:#555;
-margin-left:5px;
-}
-
+.btn.primary{background:var(--blue);color:#fff;border-color:transparent}
+.btn.danger{background:var(--danger);color:#fff;border-color:transparent}
+.hint{color:var(--muted);margin-top:8px}
+.error{color:var(--danger);font-weight:800;margin-top:10px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.grid-4{display:grid;grid-template-columns:1.4fr .8fr .8fr 1fr;gap:12px}
+@media(max-width:900px){.grid-3,.grid-4{grid-template-columns:1fr}}
+.divider{height:1px;background:var(--border);margin:14px 0}
+.pass-card{border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;background:#fff}
+.pass-grid{display:grid;grid-template-columns:1.4fr .9fr .8fr 1fr;gap:10px;align-items:end}
+@media(max-width:900px){.pass-grid{grid-template-columns:1fr}}
+.small{color:var(--muted);font-size:12px}
+.badge{display:inline-block;padding:4px 8px;border:1px solid var(--border);border-radius:999px;font-weight:800;color:var(--blue);background:#fff}

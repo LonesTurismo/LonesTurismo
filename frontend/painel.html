@@ -1,45 +1,35 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-br">
 <head>
-<meta charset="UTF-8">
-<title>Painel</title>
-<link rel="stylesheet" href="css/style.css">
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Painel</title>
+  <link rel="stylesheet" href="css/style.css"/>
 </head>
 <body>
-
-<header>
-  <div class="logo">
-    <img src="img/logo-lones.png">
-  </div>
-  <nav>
+<header class="topbar">
+  <div class="brand"><img class="logo" src="img/logo-lones.png" alt="LonesTur"></div>
+  <nav class="menu">
     <a href="LonesTur.html">Início</a>
-    <a href="destino.html">Solicitar Viagem</a>
+    <a class="active" href="painel.html">Painel</a>
+    <a href="#" id="btnLogout">Sair</a>
   </nav>
 </header>
 
-<h2>Painel Administrativo</h2>
+<main class="page">
+  <div class="container wide">
+    <div class="card">
+      <h2 style="margin:0 0 6px 0;">Painel Administrativo</h2>
+      <div class="hint">
+        Exporta <span class="badge">Excel</span> / <span class="badge">Word</span> / <span class="badge">ZIP</span>.
+        Depois de baixar, use <b>Apagar arquivos online</b> para liberar espaço no Cloudinary.
+      </div>
+    </div>
 
-<a href="LonesTur.html" class="btn-voltar">← Voltar ao Início</a>
+    <div id="tripsContainer"></div>
+  </div>
+</main>
 
-<input type="text" id="busca" placeholder="Buscar..." onkeyup="buscar()">
-
-<table>
-<thead>
-<tr>
-<th>Cidade</th>
-<th>Responsável</th>
-<th>Nome</th>
-<th>CPF</th>
-<th>Status</th>
-<th>Ações</th>
-</tr>
-</thead>
-<tbody id="tabela"></tbody>
-</table>
-
-<button onclick="limpar()">Limpar Tudo</button>
-<button onclick="logout()">Sair</button>
-
-<script src="js/script.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>

@@ -27,6 +27,13 @@ function getAdminToken() { return localStorage.getItem("adminToken"); }
 function setAdminToken(t) { localStorage.setItem("adminToken", t); }
 function clearAdminToken() { localStorage.removeItem("adminToken"); }
 
+const API = "https://lonesturismo.onrender.com";
+
+// aquece o servidor
+fetch(API + "/health")
+  .then(() => console.log("Servidor acordado"))
+  .catch(() => console.log("Servidor ainda acordando"));
+
 // ---------- cadastro (criar viagem) ----------
 async function createTrip() {
   const destination = document.getElementById("destination").value.trim();

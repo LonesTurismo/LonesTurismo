@@ -98,6 +98,10 @@ function guessExtFromContentType(ct = "") {
   return "";
 }
 
+app.get("/health", (req, res) => {
+  res.json({ status: "ok" });
+});
+
 // =====================
 // ROTAS
 // =====================

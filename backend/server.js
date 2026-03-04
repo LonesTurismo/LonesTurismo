@@ -16,6 +16,14 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
 
+app.get("/", (req, res) => {
+  res.send("✅ Backend LonesTur online. Use /health ou /api");
+});
+
+app.get("/health", (req, res) => {
+  res.json({ ok: true, service: "LonesTur API" });
+});
+
 const db = openDb();
 
 // Render / Node 22: crypto.randomUUID disponível

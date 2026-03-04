@@ -1,20 +1,18 @@
 // ✅ Render backend
-const API = "";
+const API = "https://lonesturismo.onrender.com"; // <--- COLOQUE SUA URL AQUI
 
 // acorda o servidor (reduz delay do primeiro clique)
 document.addEventListener("DOMContentLoaded", () => {
-  fetch(`${API}/api/admin/login`)
-fetch(`${API}/api/admin/trips`)
-fetch(`${API}/health`)
+  fetch(`${API}/health`).catch(() => {});
 });
-// ---------- helpers ----------
-function onlyDigits(s = "") { return String(s).replace(/\D/g, ""); }
-function formatCPF(cpf) {
-  const d = onlyDigits(cpf).slice(0, 11);
-  if (d.length <= 3) return d;
-  if (d.length <= 6) return d.replace(/(\d{3})(\d+)/, "$1.$2");
-  if (d.length <= 9) return d.replace(/(\d{3})(\d{3})(\d+)/, "$1.$2.$3");
-  return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+
+// helper: fetch que não quebra se a resposta não for JSON
+async function fetchJson(url, options) {
+  const r = await fetch(url, options);
+  const text = await r.text();
+  let data = {};
+  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
+  return { r, data };
 }
 function getQS(name) { return new URL(window.location.href).searchParams.get(name); }
 
@@ -33,29 +31,76 @@ function getAdminToken() { return localStorage.getItem("adminToken"); }
 function setAdminToken(t) { localStorage.setItem("adminToken", t); }
 function clearAdminToken() { localStorage.removeItem("adminToken"); }
 
-// ---------- cadastro (criar viagem) ----------
-async function createTrip() {
-  const destination = document.getElementById("destination").value.trim();
-  const dateIso = document.getElementById("dateIso").value.trim();
-  const responsible = document.getElementById("responsible").value.trim();
-  const info = document.getElementById("tripInfo");
+async function adminLogin() {
+  const user = document.getElementById("admUser").value;
+  const pass = document.getElementById("admPass").value;
+  const error = document.getElementById("admError");
 
-  if (!destination || !dateIso || !responsible) return alert("Preencha destino, data e responsável.");
+  error.textContent = "";
 
-  const r = await fetch(`${API}/api/trips`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ destination, dateIso, responsible })
-  });
-  const d = await r.json();
-  if (!r.ok) return alert(d.error || "Erro ao criar viagem");
+  try {
+    const r = await fetch("https://lonesturismo.onrender.com/api/admin/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        user: user,
+        pass: pass
+      })
+    });
 
-  setTripSession(d.trip.id, d.pin);
+    const data = await r.json();
 
-  info.innerHTML = `Viagem criada: <b>${d.trip.id}</b> • PIN: <b>${d.pin}</b> • ${d.trip.destination} • ${d.trip.dateIso} • Resp: ${d.trip.responsible}`;
-  alert(`Viagem criada!\nID: ${d.trip.id}\nPIN: ${d.pin}\n\nGuarde o PIN para editar depois.`);
+    if (!r.ok) {
+      error.textContent = data.error || "Erro no login";
+      return;
+    }
+
+    localStorage.setItem("adminToken", data.token);
+
+    window.location.href = "painel.html";
+
+  } catch (err) {
+    error.textContent = "Erro ao conectar com o servidor";
+    console.error(err);
+  }
 }
 
+
+// ---------- cadastro (criar viagem) ----------
+async function createTrip() {
+  try {
+    const destination = document.getElementById("destination").value.trim();
+    const dateIso = document.getElementById("dateIso").value.trim();
+    const responsible = document.getElementById("responsible").value.trim();
+    const info = document.getElementById("tripInfo");
+
+    if (!destination || !dateIso || !responsible) {
+      return alert("Preencha destino, data e responsável.");
+    }
+
+    const { r, data } = await fetchJson(`${API}/api/trips`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ destination, dateIso, responsible })
+    });
+
+    if (!r.ok) return alert(data.error || "Erro ao criar viagem");
+
+    setTripSession(data.trip.id, data.pin);
+
+    // backend retorna date_iso (não dateIso)
+    info.innerHTML =
+      `Viagem criada: <b>${data.trip.id}</b> • PIN: <b>${data.pin}</b> • ` +
+      `${data.trip.destination} • ${data.trip.date_iso} • Resp: ${data.trip.responsible}`;
+
+    alert(`Viagem criada!\nID: ${data.trip.id}\nPIN: ${data.pin}\n\nGuarde o PIN para editar depois.`);
+  } catch (e) {
+    console.error(e);
+    alert("Falha ao criar viagem (ver console).");
+  }
+}
 async function copyTrip() {
   const { tripId, tripPin } = getTripSession();
   if (!tripId || !tripPin) return alert("Crie a viagem primeiro.");

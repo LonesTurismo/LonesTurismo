@@ -1,152 +1,191 @@
-function salvarDestino(){
-let cidade = document.getElementById("cidade").value;
-let responsavel = document.getElementById("responsavel").value;
+// URL do backend no Render
+const API = "https://lonesturismo.onrender.com";
 
-localStorage.setItem("cidade", cidade);
-localStorage.setItem("responsavel", responsavel);
+// ===============================
+// CRIAR NOVA VIAGEM
+// ===============================
+async function criarViagem() {
+  const destino = document.getElementById("destino").value;
+  const data = document.getElementById("data").value;
+  const responsavel = document.getElementById("responsavel").value;
 
-window.location.href="passageiro.html";
+  if (!destino || !data || !responsavel) {
+    alert("Preencha todos os campos.");
+    return;
+  }
+
+  const resposta = await fetch(`${API}/trip`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      destino,
+      data,
+      responsavel
+    })
+  });
+
+  const dados = await resposta.json();
+
+  if (dados.id) {
+    alert("Viagem criada com sucesso!");
+    window.location.href = `cadastro.html?id=${dados.id}`;
+  } else {
+    alert("Erro ao criar viagem");
+  }
 }
 
-function mostrarIndividual(){
-document.getElementById("individual").style.display="block";
-document.getElementById("turma").style.display="none";
+// ===============================
+// CADASTRAR PASSAGEIRO
+// ===============================
+async function cadastrarPassageiro() {
+  const params = new URLSearchParams(window.location.search);
+  const viagem_id = params.get("id");
+
+  const nome = document.getElementById("nome").value;
+  const cpf = document.getElementById("cpf").value;
+  const telefone = document.getElementById("telefone").value;
+  const arquivo = document.getElementById("documento").files[0];
+
+  if (!nome || !cpf || !telefone) {
+    alert("Preencha todos os campos.");
+    return;
+  }
+
+  const formData = new FormData();
+
+  formData.append("viagem_id", viagem_id);
+  formData.append("nome", nome);
+  formData.append("cpf", cpf);
+  formData.append("telefone", telefone);
+
+  if (arquivo) {
+    formData.append("documento", arquivo);
+  }
+
+  const resposta = await fetch(`${API}/passenger`, {
+    method: "POST",
+    body: formData
+  });
+
+  const dados = await resposta.json();
+
+  if (dados.success) {
+    alert("Passageiro cadastrado!");
+    location.reload();
+  } else {
+    alert("Erro ao cadastrar passageiro");
+  }
 }
 
-function mostrarTurma(){
-document.getElementById("individual").style.display="none";
-document.getElementById("turma").style.display="block";
+// ===============================
+// CARREGAR PASSAGEIROS DA VIAGEM
+// ===============================
+async function carregarPassageiros() {
+  const params = new URLSearchParams(window.location.search);
+  const viagem_id = params.get("id");
+
+  if (!viagem_id) return;
+
+  const resposta = await fetch(`${API}/trip/${viagem_id}`);
+  const passageiros = await resposta.json();
+
+  const tabela = document.getElementById("listaPassageiros");
+  tabela.innerHTML = "";
+
+  passageiros.forEach(p => {
+    const linha = `
+      <tr>
+        <td>${p.nome}</td>
+        <td>${p.cpf}</td>
+        <td>${p.telefone}</td>
+      </tr>
+    `;
+    tabela.innerHTML += linha;
+  });
 }
 
-function enviarIndividual(){
-let nome = document.getElementById("nome").value;
-let cpf = document.getElementById("cpf").value;
-let cidade = localStorage.getItem("cidade");
+// ===============================
+// LOGIN ADMIN
+// ===============================
+async function loginAdmin() {
+  const user = document.getElementById("user").value;
+  const senha = document.getElementById("senha").value;
 
-if(cpf.length !== 10){
-alert("CPF deve ter 10 caracteres");
-return;
+  const resposta = await fetch(`${API}/admin/login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      user,
+      senha
+    })
+  });
+
+  const dados = await resposta.json();
+
+  if (dados.success) {
+    window.location.href = "painel.html";
+  } else {
+    alert("Usuário ou senha inválidos");
+  }
 }
 
-let solicitacoes = JSON.parse(localStorage.getItem("solicitacoes")) || [];
+// ===============================
+// CARREGAR VIAGENS NO PAINEL
+// ===============================
+async function carregarViagens() {
+  const resposta = await fetch(`${API}/admin/viagens`);
+  const viagens = await resposta.json();
 
-solicitacoes.push({
-cidade,
-nome,
-cpf,
-status:"Pendente",
-data:new Date().toLocaleString()
-});
+  const tabela = document.getElementById("tabelaViagens");
+  if (!tabela) return;
 
-localStorage.setItem("solicitacoes", JSON.stringify(solicitacoes));
-alert("Solicitação enviada!");
-window.location.href="index.html";
+  tabela.innerHTML = "";
+
+  viagens.forEach(v => {
+    const linha = `
+      <tr>
+        <td>${v.destino}</td>
+        <td>${v.data}</td>
+        <td>${v.responsavel}</td>
+        <td>
+          <a href="editar.html?id=${v.id}">Ver passageiros</a>
+        </td>
+      </tr>
+    `;
+
+    tabela.innerHTML += linha;
+  });
 }
 
-function adicionarPassageiro(){
-
-let div = document.createElement("div");
-div.classList.add("linha-passageiro");
-
-div.innerHTML=`
-<input type="text" placeholder="Nome" maxlength="100">
-<input type="text" placeholder="CPF" maxlength="10">
-<input type="text" placeholder="Telefone" maxlength="11">
-
-<label class="upload-btn">
-Selecionar Arquivo
-<input type="file" accept=".jpg,.jpeg,.png" onchange="mostrarNomeArquivo(this)">
-</label>
-
-<span class="nome-arquivo">Nenhum arquivo</span>
-`;
-
-document.getElementById("listaPassageiros").appendChild(div);
+// ===============================
+// EXPORTAR EXCEL
+// ===============================
+function exportarExcel(id) {
+  window.open(`${API}/admin/export/excel/${id}`);
 }
 
-function mostrarNomeArquivo(input){
-
-let nomeSpan = input.closest(".linha-passageiro").querySelector(".nome-arquivo");
-
-if(input.files.length > 0){
-    nomeSpan.textContent = input.files[0].name;
-}else{
-    nomeSpan.textContent = "Nenhum arquivo";
-}
+// ===============================
+// EXPORTAR WORD
+// ===============================
+function exportarWord(id) {
+  window.open(`${API}/admin/export/word/${id}`);
 }
 
-function enviarTurma(){
-alert("Função de envio da turma pode ser expandida.");
+// ===============================
+// EXPORTAR ZIP
+// ===============================
+function exportarZip(id) {
+  window.open(`${API}/admin/export/zip/${id}`);
 }
 
-function login(){
-let user = document.getElementById("user").value;
-let senha = document.getElementById("senha").value;
-
-if(user==="admin" && senha==="1234"){
-window.location.href="painel.html";
-}else{
-document.getElementById("erro").innerText="Usuário ou senha incorretos";
-}
-}
-
-function carregar(){
-
-let solicitacoes = JSON.parse(localStorage.getItem("solicitacoes")) || [];
-let tabela = document.getElementById("tabela");
-
-if(!tabela) return;
-
-tabela.innerHTML = "";
-
-solicitacoes.forEach((s, i) => {
-
-tabela.innerHTML += `
-<tr>
-<td>${s.cidade || "-"}</td>
-<td>${s.responsavel || "-"}</td>
-<td>${s.nome}</td>
-<td>${s.cpf}</td>
-<td>${s.status}</td>
-<td>
-<button onclick="aprovar(${i})">Aprovar</button>
-<button onclick="excluir(${i})">Excluir</button>
-</td>
-</tr>
-`;
-
-});
-
-}
-function aprovar(i){
-let solicitacoes = JSON.parse(localStorage.getItem("solicitacoes"));
-solicitacoes[i].status="Aprovado";
-localStorage.setItem("solicitacoes",JSON.stringify(solicitacoes));
-carregar();
-}
-
-function excluir(i){
-let solicitacoes = JSON.parse(localStorage.getItem("solicitacoes"));
-solicitacoes.splice(i,1);
-localStorage.setItem("solicitacoes",JSON.stringify(solicitacoes));
-carregar();
-}
-
-function limpar(){
-localStorage.removeItem("solicitacoes");
-carregar();
-}
-
-function logout(){
-window.location.href="admin.html";
-}
-
-window.onload=carregar;
-
-document.addEventListener("input", function(e){
-
-if(e.target.placeholder === "Telefone"){
-    e.target.value = e.target.value.slice(0,13);
-}
-
-});
+// ===============================
+// AUTO LOAD
+// ===============================
+window.onload = () => {
+  carregarPassageiros();
+  carregarViagens();
+};

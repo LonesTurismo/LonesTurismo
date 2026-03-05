@@ -2,7 +2,12 @@
   "rewrites": [
     { "source": "/api/(.*)", "destination": "https://lonesturismo.onrender.com/api/$1" },
     { "source": "/health", "destination": "https://lonesturismo.onrender.com/health" },
-
+    { "source": "/", "destination": "/frontend/index.html" },
+    { "source": "/admin", "destination": "/frontend/admin.html" },
+    { "source": "/painel", "destination": "/frontend/painel.html" },
+    { "source": "/cadastro", "destination": "/frontend/cadastro.html" },
     { "source": "/(.*)", "destination": "/frontend/$1" }
+  ]
+
   ]
 }

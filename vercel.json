@@ -11,19 +11,42 @@
       ]
     }
   ],
-  "rewrites": [
-   
-    { "source": "/api/(.*)", "destination": "https://lonesturismo.vercel.app/api/$1" },
-    { "source": "/health",   "destination": "https://lonesturismo.vercel.app/health" },
-
+  {
   
-    { "source": "/",          "destination": "/frontend/index.html" },
-    { "source": "/cadastro",  "destination": "/frontend/cadastro.html" },
-    { "source": "/editar",    "destination": "/frontend/editar.html" },
-    { "source": "/admin",     "destination": "/frontend/admin.html" },
-    { "source": "/painel",    "destination": "/frontend/painel.html" },
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://lonesturismo.onrender.app/api/$1"
+    },
+    {
+      "source": "/health",
+      "destination": "https://lonesturismo.onrender.app/health"
+    },
 
+    {
+      "source": "/",
+      "destination": "/frontend/index.html"
+    },
+    {
+      "source": "/admin",
+      "destination": "/frontend/admin.html"
+    },
+    {
+      "source": "/painel",
+      "destination": "/frontend/painel.html"
+    },
+    {
+      "source": "/cadastro",
+      "destination": "/frontend/cadastro.html"
+    },
+    {
+      "source": "/editar",
+      "destination": "/frontend/editar.html"
+    },
 
-    { "source": "/(.*)",      "destination": "/frontend/$1" }
+    {
+      "source": "/(.*)",
+      "destination": "/frontend/$1"
+    }
   ]
 }

@@ -1,461 +1,407 @@
-// ✅ Render backend
-const API = "https://lonesturismo.onrender.com"; // <--- COLOQUE SUA URL AQUI
+// ==================== app.js - ÚNICO ARQUIVO PARA TODO O SITE ====================
+// Cadastro • Editar • Admin Login • Painel Admin
+// Totalmente otimizado, sem duplicação, rápido e fácil de manter
 
-// acorda o servidor (reduz delay do primeiro clique)
-document.addEventListener("DOMContentLoaded", () => {
-  fetch(`${API}/health`).catch(() => {});
-});
+const API = "";
 
-// helper: fetch que não quebra se a resposta não for JSON
-async function fetchJson(url, options) {
-  const r = await fetch(url, options);
-  const text = await r.text();
-  let data = {};
-  try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
-  return { r, data };
-}
-function getQS(name) { return new URL(window.location.href).searchParams.get(name); }
+// ==================== HELPERS COMPARTILHADOS ====================
+const $ = (sel) => document.querySelector(sel);
+const getQS = (name) => new URLSearchParams(location.search).get(name);
 
-function setTripSession(tripId, pin) {
-  sessionStorage.setItem("tripId", tripId);
+const onlyDigits = (str) => (str || "").replace(/\D/g, "");
+const formatCPF = (val) => {
+  let cpf = onlyDigits(val).slice(0, 11);
+  return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")
+            .replace(/(\d{3})(\d{3})(\d{1,3})/, "$1.$2.$3")
+            .replace(/(\d{3})(\d{1,3})/, "$1.$2");
+};
+
+const sanitize = (str) => {
+  if (!str) return "";
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+};
+
+function setTripSession(id, pin) {
+  sessionStorage.setItem("tripId", id);
   sessionStorage.setItem("tripPin", pin);
 }
 function getTripSession() {
-  return {
-    tripId: sessionStorage.getItem("tripId"),
-    tripPin: sessionStorage.getItem("tripPin")
-  };
+  return { tripId: sessionStorage.getItem("tripId"), tripPin: sessionStorage.getItem("tripPin") };
 }
 
-function getAdminToken() { return localStorage.getItem("adminToken"); }
-function setAdminToken(t) { localStorage.setItem("adminToken", t); }
-function clearAdminToken() { localStorage.removeItem("adminToken"); }
+// Upload de documentos (reutilizado em vários lugares)
+async function uploadDocs(tripId, passengerId, pin, files) {
+  if (!files?.length) return;
+  if (files.length > 4) throw new Error("Máximo 4 arquivos");
 
-async function adminLogin() {
-  const user = document.getElementById("admUser").value;
-  const pass = document.getElementById("admPass").value;
-  const error = document.getElementById("admError");
+  const fd = new FormData();
+  fd.append("pin", pin);
+  [...files].forEach(f => fd.append("files", f));
 
-  error.textContent = "";
+  const res = await fetch(`${API}/api/trips/${tripId}/passengers/${passengerId}/documents`, { method: "POST", body: fd });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || "Erro no upload");
+}
+function setLoading(btn, isLoading, originalText = "") {
+  if (isLoading) {
+    originalText = btn.textContent;
+    btn.dataset.originalText = originalText;
+    btn.disabled = true;
+    btn.innerHTML = `<span class="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></span> Processando...`;
+  } else {
+    btn.disabled = false;
+    btn.innerHTML = btn.dataset.originalText || originalText;
+  }
+}
 
-  try {
-    const r = await fetch("https://lonesturismo.onrender.com/api/admin/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        user: user,
-        pass: pass
-      })
+// ==================== API CLIENT ====================
+const api = {
+  async request(endpoint, method = "POST", body = null, isAdmin = false) {
+    const headers = { "Content-Type": "application/json" };
+    if (isAdmin) {
+      const token = localStorage.getItem("adminToken");
+      if (token) headers.Authorization = `Bearer ${token}`;
+    }
+
+    const res = await fetch(`${API}${endpoint}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : null
     });
 
-    const data = await r.json();
+    if (!res.ok) {
+      if (res.status === 401 && isAdmin) {
+        localStorage.removeItem("adminToken");
+        location.href = "admin.html";
+        return;
+      }
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Erro ${res.status}`);
+    }
+    return res.json();
+  },
+  post: (ep, body, admin = false) => api.request(ep, "POST", body, admin),
+  put:  (ep, body, admin = false) => api.request(ep, "PUT",  body, admin),
+  del:  (ep, body, admin = false) => api.request(ep, "DELETE", body, admin)
+};
 
-    if (!r.ok) {
-      error.textContent = data.error || "Erro no login";
+// ==================== DOWNLOAD ADMIN ====================
+const downloadWithAuth = async (url, fallbackName = "viagem.zip") => {
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${localStorage.getItem("adminToken")}` }
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  const cd = res.headers.get("content-disposition");
+  const filename = cd?.match(/filename="([^"]+)"/i)?.[1] || fallbackName;
+
+  const blob = await res.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+// ==================== CADASTRO + EDITAR (páginas públicas) ====================
+if ($("#btnCreateTrip") || $("#editTripId")) {  // cadastro ou editar
+
+  // === CADASTRO ===
+  async function createTrip() {
+    const destination = $("#destination").value.trim();
+    const dateIso = $("#dateIso").value.trim();
+    const responsible = $("#responsible").value.trim();
+
+    if (!destination || !dateIso || !responsible) return alert("Preencha todos os campos");
+
+    try {
+      const data = await api.post("/api/trips", { destination, dateIso, responsible });
+      setTripSession(data.trip.id, data.pin);
+
+      $("#tripInfo").innerHTML = `Viagem criada: <b>${data.trip.id}</b> • PIN: <b>${data.pin}</b><br>
+                                  ${data.trip.destination} • ${data.trip.date_iso} • Resp: ${data.trip.responsible}`;
+      alert(`✅ Viagem criada!\nID: ${data.trip.id}\nPIN: ${data.pin}`);
+    } catch (e) { alert(e.message); }
+  }
+
+  async function addPassenger(tripId, pin, name, cpf, phone, files) {
+    if (!name) throw new Error("Informe o nome");
+    if (cpf.length !== 11) throw new Error("CPF deve ter 11 dígitos");
+
+    const data = await api.post(`/api/trips/${tripId}/passengers`, { pin, name, cpf, phone });
+    await uploadDocs(tripId, data.passengerId, pin, files);
+  }
+
+  // === EDITAR ===
+  async function loadTripForEdit() {
+    const tripId = $("#editTripId").value.trim();
+    const pin = $("#editPin").value.trim();
+    const err = $("#editError");
+
+    if (!tripId || !pin) return err.textContent = "Informe ID e PIN";
+
+    try {
+      await api.post(`/api/trips/${tripId}/verify-pin`, { pin });
+      const data = await api.post(`/api/trips/${tripId}/load`, { pin });
+
+      setTripSession(tripId, pin);
+      $("#editArea").style.display = "block";
+      $("#tripHeader").textContent = `🆔 ${data.trip.id} • ${data.trip.destination} • ${data.trip.date_iso}`;
+      $("#tripHint").textContent = `Responsável: ${data.trip.responsible}`;
+
+      renderPassengers(tripId, pin, data.passengers);
+    } catch (e) { err.textContent = e.message; }
+  }
+
+  function renderPassengers(tripId, pin, passengers) {
+    const container = $("#passList");
+    container.innerHTML = "";
+
+    const frag = document.createDocumentFragment();
+    passengers.forEach(p => {
+      const div = document.createElement("div");
+      div.className = "pass-card";
+      div.dataset.id = p.id;
+      div.innerHTML = `
+        <div class="pass-grid">
+          <div><label>Nome</label><input data-f="name" value="${p.name}" maxlength="100"></div>
+          <div><label>CPF</label><input data-f="cpf" value="${formatCPF(p.cpf)}" maxlength="14"></div>
+          <div><label>Telefone</label><input data-f="phone" value="${p.phone || ""}" maxlength="13"></div>
+          <div><label>Docs (até 4)</label><input data-f="docs" type="file" multiple accept=".jpg,.jpeg,.png">
+            <div class="small">Atuais: ${(p.documents || []).length}</div>
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn primary" data-action="save">Salvar</button>
+          <button class="btn danger" data-action="del">Excluir</button>
+        </div>
+      `;
+      frag.appendChild(div);
+    });
+    container.appendChild(frag);
+  }
+
+  // ==================== EVENTOS PÚBLICOS ====================
+  document.addEventListener("DOMContentLoaded", () => {
+    // Auto-fill ID
+    const qid = getQS("id");
+    if (qid && $("#editTripId")) $("#editTripId").value = qid;
+
+    // Máscara CPF
+    document.addEventListener("input", e => {
+      if (e.target.placeholder?.includes("000.000.000-00")) e.target.value = formatCPF(e.target.value);
+    });
+
+    // Cadastro
+    $("#btnCreateTrip")?.addEventListener("click", createTrip);
+    $("#btnAddPassenger")?.addEventListener("click", async () => {
+      const { tripId, tripPin } = getTripSession();
+      if (!tripId) return alert("Crie a viagem primeiro");
+      try {
+        await addPassenger(tripId, tripPin, $("#pName").value.trim(), onlyDigits($("#pCpf").value), $("#pPhone").value.slice(0,13), $("#pDocs").files);
+        alert("✅ Passageiro adicionado!");
+      } catch (e) { alert(e.message); }
+    });
+
+    // Editar
+    $("#btnLoadTrip")?.addEventListener("click", loadTripForEdit);
+    $("#btnCreatePassenger")?.addEventListener("click", async () => {
+      const { tripId, tripPin } = getTripSession();
+      if (!tripId) return alert("Carregue a viagem");
+      try {
+        await addPassenger(tripId, tripPin, $("#newName").value.trim(), onlyDigits($("#newCpf").value), $("#newPhone").value.slice(0,13), $("#newDocs").files);
+        alert("✅ Passageiro adicionado!");
+        await loadTripForEdit();
+      } catch (e) { alert(e.message); }
+    });
+
+    // Delegation salvar/excluir passageiros
+    $("#passList")?.addEventListener("click", async e => {
+      const btn = e.target.closest("button");
+      if (!btn) return;
+      const card = btn.closest(".pass-card");
+      const { tripId, tripPin } = getTripSession();
+      const pid = card.dataset.id;
+
+      if (btn.dataset.action === "save") {
+        const name = card.querySelector('[data-f="name"]').value.trim();
+        const cpf = onlyDigits(card.querySelector('[data-f="cpf"]').value);
+        const phone = card.querySelector('[data-f="phone"]').value.slice(0,13);
+        const files = card.querySelector('[data-f="docs"]').files;
+
+        try {
+          await api.put(`/api/trips/${tripId}/passengers/${pid}`, { pin: tripPin, name, cpf, phone });
+          await uploadDocs(tripId, pid, tripPin, files);
+          alert("✅ Salvo!");
+          await loadTripForEdit();
+        } catch (err) { alert(err.message); }
+      }
+
+      if (btn.dataset.action === "del") {
+        if (!confirm("Excluir passageiro?")) return;
+        try {
+          await api.del(`/api/trips/${tripId}/passengers/${pid}`, { pin: tripPin });
+          alert("✅ Excluído!");
+          await loadTripForEdit();
+        } catch (err) { alert(err.message); }
+      }
+    });
+  });
+}
+
+// ==================== PAINEL ADMIN ====================
+if ($("#tabs") || $("#btnAdminLogin")) {
+
+  const els = {
+    tabs: $("#tabs"),
+    tbody: $("#tbody"),
+    titulo: $("#viagemTitulo"),
+    info: $("#viagemInfo"),
+    btnZip: $("#btnZip"),
+    btnApagar: $("#btnApagar"),
+    btnLogout: $("#btnLogout"),
+    admError: $("#admError")
+  };
+
+  const state = { trips: [], selectedTripId: null, isLoading: false };
+
+  function renderPassengers(passengers) {
+    els.tbody.innerHTML = passengers?.length
+      ? passengers.map(p => `<tr><td>${sanitize(p.name)}</td><td>${sanitize(p.cpf)}</td><td>${sanitize(p.phone || "-")}</td></tr>`).join("")
+      : `<tr><td colspan="3" class="muted">Nenhum passageiro cadastrado.</td></tr>`;
+  }
+
+  function renderTabs(trips) {
+    state.trips = trips || [];
+    els.tabs.innerHTML = "";
+
+    if (!state.trips.length) {
+      els.titulo.textContent = "Nenhuma viagem cadastrada";
+      renderPassengers([]);
       return;
     }
 
-    localStorage.setItem("adminToken", data.token);
+    const frag = document.createDocumentFragment();
+    state.trips.forEach(t => {
+      const b = document.createElement("button");
+      b.className = "tab";
+      b.textContent = `${sanitize(t.destination)} (${t.id})`;
+      b.dataset.id = t.id;
+      frag.appendChild(b);
+    });
+    els.tabs.appendChild(frag);
 
-    window.location.href = "painel.html";
-
-  } catch (err) {
-    error.textContent = "Erro ao conectar com o servidor";
-    console.error(err);
+    // Seleciona primeira aba
+    selectTrip(state.trips[0].id);
   }
-}
 
+  async function selectTrip(tripId) {
+    if (state.isLoading) return;
+    state.isLoading = true;
+    state.selectedTripId = tripId;
 
-// ---------- cadastro (criar viagem) ----------
-async function createTrip() {
-  try {
-    const destination = document.getElementById("destination").value.trim();
-    const dateIso = document.getElementById("dateIso").value.trim();
-    const responsible = document.getElementById("responsible").value.trim();
-    const info = document.getElementById("tripInfo");
+    try {
+      const trip = state.trips.find(t => t.id === tripId);
+      els.titulo.textContent = sanitize(trip.destination);
+      els.info.textContent = `ID: ${trip.id} • Saída: ${trip.date_iso} • Resp: ${sanitize(trip.responsible)}`;
 
-    if (!destination || !dateIso || !responsible) {
-      return alert("Preencha destino, data e responsável.");
+      const data = await api.post(`/api/admin/trips/${tripId}/passengers`, null, true);
+      renderPassengers(data.passengers || []);
+    } catch (e) {
+      els.titulo.textContent = "Erro ao carregar";
+    } finally {
+      state.isLoading = false;
     }
-
-    const { r, data } = await fetchJson(`${API}/api/trips`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ destination, dateIso, responsible })
-    });
-
-    if (!r.ok) return alert(data.error || "Erro ao criar viagem");
-
-    setTripSession(data.trip.id, data.pin);
-
-    // backend retorna date_iso (não dateIso)
-    info.innerHTML =
-      `Viagem criada: <b>${data.trip.id}</b> • PIN: <b>${data.pin}</b> • ` +
-      `${data.trip.destination} • ${data.trip.date_iso} • Resp: ${data.trip.responsible}`;
-
-    alert(`Viagem criada!\nID: ${data.trip.id}\nPIN: ${data.pin}\n\nGuarde o PIN para editar depois.`);
-  } catch (e) {
-    console.error(e);
-    alert("Falha ao criar viagem (ver console).");
-  }
-}
-async function copyTrip() {
-  const { tripId, tripPin } = getTripSession();
-  if (!tripId || !tripPin) return alert("Crie a viagem primeiro.");
-  await navigator.clipboard.writeText(`ID: ${tripId}\nPIN: ${tripPin}`);
-  alert("ID + PIN copiados!");
-}
-
-async function addPassengerFromCadastro() {
-  const { tripId, tripPin } = getTripSession();
-  if (!tripId || !tripPin) return alert("Crie a viagem antes e guarde o PIN.");
-
-  const name = document.getElementById("pName").value.trim();
-  const cpf = onlyDigits(document.getElementById("pCpf").value);
-  const phone = (document.getElementById("pPhone").value || "").slice(0, 13);
-  const files = document.getElementById("pDocs").files;
-
-  if (!name) return alert("Informe o nome.");
-  if (cpf.length !== 11) return alert("CPF deve ter 11 dígitos.");
-
-  const r = await fetch(`${API}/api/trips/${tripId}/passengers`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pin: tripPin, name, cpf, phone })
-  });
-  const d = await r.json();
-  if (!r.ok) return alert(d.error || "Erro ao adicionar passageiro");
-
-  if (files && files.length) {
-    if (files.length > 4) return alert("Máximo 4 arquivos.");
-    const fd = new FormData();
-    fd.append("pin", tripPin);
-    for (const f of files) fd.append("files", f);
-
-    const up = await fetch(`${API}/api/trips/${tripId}/passengers/${d.passengerId}/documents`, {
-      method: "POST",
-      body: fd
-    });
-    const ud = await up.json();
-    if (!up.ok) return alert(ud.error || "Erro no upload");
   }
 
-  alert("Passageiro adicionado!");
+  // ==================== ADMIN LOGIN ====================
+  $("#btnAdminLogin")?.addEventListener("click", async () => {
+    const user = $("#admUser").value.trim();
+    const pass = $("#admPass").value.trim();
 
-  document.getElementById("pName").value = "";
-  document.getElementById("pCpf").value = "";
-  document.getElementById("pPhone").value = "";
-  document.getElementById("pDocs").value = "";
-}
-
-// ---------- editar ----------
-async function loadTripForEdit() {
-  const tripId = document.getElementById("editTripId").value.trim();
-  const pin = document.getElementById("editPin").value.trim();
-  const err = document.getElementById("editError");
-  err.textContent = "";
-
-  if (!tripId || !pin) { err.textContent = "Informe ID e PIN."; return; }
-
-  // verify
-  const v = await fetch(`${API}/api/trips/${tripId}/verify-pin`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pin })
+    try {
+      const data = await api.post("/api/admin/login", { user, pass });
+      localStorage.setItem("adminToken", data.token);
+      location.href = "painel.html";
+    } catch (e) {
+      els.admError && (els.admError.textContent = e.message);
+    }
   });
-  const vd = await v.json();
-  if (!v.ok) { err.textContent = vd.error || "PIN inválido"; return; }
 
-  setTripSession(tripId, pin);
+  // ==================== PAINEL EVENTOS ====================
+  document.addEventListener("DOMContentLoaded", async () => {
+    if ($("#tabs")) {  // Página painel.html
+      // Acorda servidor
+      fetch(`${API}/health`).catch(() => {});
 
-  const r = await fetch(`${API}/api/trips/${tripId}/load`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pin })
-  });
-  const d = await r.json();
-  if (!r.ok) { err.textContent = d.error || "Erro"; return; }
-
-  document.getElementById("editArea").style.display = "block";
-  document.getElementById("tripHeader").textContent = `🆔 ${d.trip.id} • ${d.trip.destination} • ${d.trip.dateIso}`;
-  document.getElementById("tripHint").textContent = `Responsável: ${d.trip.responsible}`;
-
-  renderPassengers(d.trip.id, pin, d.passengers);
-}
-
-function renderPassengers(tripId, pin, passengers) {
-  const list = document.getElementById("passList");
-  list.innerHTML = "";
-
-  passengers.forEach(p => {
-    const div = document.createElement("div");
-    div.className = "pass-card";
-    div.innerHTML = `
-      <div class="pass-grid">
-        <div>
-          <label>Nome</label>
-          <input data-f="name" value="${p.name}" maxlength="100">
-        </div>
-        <div>
-          <label>CPF</label>
-          <input data-f="cpf" value="${formatCPF(p.cpf)}" maxlength="14" placeholder="000.000.000-00">
-        </div>
-        <div>
-          <label>Telefone (13)</label>
-          <input data-f="phone" value="${p.phone || ""}" maxlength="13">
-        </div>
-        <div>
-          <label>Docs (até 4)</label>
-          <input data-f="docs" type="file" multiple accept=".jpg,.jpeg,.png">
-          <div class="small">Atuais: ${(p.documents || []).length}</div>
-        </div>
-      </div>
-      <div class="row">
-        <button class="btn primary" data-action="save">Salvar</button>
-        <button class="btn danger" data-action="del">Excluir</button>
-      </div>
-    `;
-
-    div.querySelector('[data-action="save"]').addEventListener("click", async () => {
-      const name = div.querySelector('[data-f="name"]').value.trim();
-      const cpf = onlyDigits(div.querySelector('[data-f="cpf"]').value);
-      const phone = div.querySelector('[data-f="phone"]').value.slice(0, 13);
-
-      const r = await fetch(`${API}/api/trips/${tripId}/passengers/${p.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin, name, cpf, phone })
-      });
-      const d = await r.json();
-      if (!r.ok) return alert(d.error || "Erro ao salvar");
-
-      const files = div.querySelector('[data-f="docs"]').files;
-      if (files && files.length) {
-        if (files.length > 4) return alert("Máximo 4 arquivos.");
-        const fd = new FormData();
-        fd.append("pin", pin);
-        for (const f of files) fd.append("files", f);
-
-        const up = await fetch(`${API}/api/trips/${tripId}/passengers/${p.id}/documents`, {
-          method: "POST",
-          body: fd
-        });
-        const ud = await up.json();
-        if (!up.ok) return alert(ud.error || "Erro no upload");
+      try {
+        const data = await api.post("/api/admin/trips", null, true);
+        renderTabs(data.trips || []);
+      } catch (e) {
+        els.titulo.textContent = "Erro de conexão";
       }
 
-      alert("Salvo!");
-      await loadTripForEdit(); // recarrega
-    });
-
-    div.querySelector('[data-action="del"]').addEventListener("click", async () => {
-      if (!confirm("Excluir este passageiro?")) return;
-
-      const r = await fetch(`${API}/api/trips/${tripId}/passengers/${p.id}`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pin })
+      // Delegation das abas
+      els.tabs?.addEventListener("click", e => {
+        const btn = e.target.closest(".tab");
+        if (!btn) return;
+        document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        selectTrip(btn.dataset.id);
       });
-      const d = await r.json();
-      if (!r.ok) return alert(d.error || "Erro ao excluir");
 
-      alert("Excluído!");
-      await loadTripForEdit();
-    });
-
-    list.appendChild(div);
-  });
-}
-
-async function addPassengerFromEdit() {
-  const { tripId, tripPin } = getTripSession();
-  if (!tripId || !tripPin) return alert("Carregue uma viagem primeiro.");
-
-  const name = document.getElementById("newName").value.trim();
-  const cpf = onlyDigits(document.getElementById("newCpf").value);
-  const phone = (document.getElementById("newPhone").value || "").slice(0, 13);
-  const files = document.getElementById("newDocs").files;
-
-  if (!name) return alert("Informe o nome.");
-  if (cpf.length !== 11) return alert("CPF deve ter 11 dígitos.");
-
-  const r = await fetch(`${API}/api/trips/${tripId}/passengers`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pin: tripPin, name, cpf, phone })
-  });
-  const d = await r.json();
-  if (!r.ok) return alert(d.error || "Erro ao adicionar passageiro");
-
-  if (files && files.length) {
-    if (files.length > 4) return alert("Máximo 4 arquivos.");
-    const fd = new FormData();
-    fd.append("pin", tripPin);
-    for (const f of files) fd.append("files", f);
-
-    const up = await fetch(`${API}/api/trips/${tripId}/passengers/${d.passengerId}/documents`, {
-      method: "POST",
-      body: fd
-    });
-    const ud = await up.json();
-    if (!up.ok) return alert(ud.error || "Erro no upload");
-  }
-
-  document.getElementById("newName").value = "";
-  document.getElementById("newCpf").value = "";
-  document.getElementById("newPhone").value = "";
-  document.getElementById("newDocs").value = "";
-
-  alert("Passageiro adicionado!");
-  await loadTripForEdit();
-}
-
-async function copyLinkPin() {
-  const id = document.getElementById("editTripId").value.trim();
-  const pin = document.getElementById("editPin").value.trim();
-  if (!id || !pin) return alert("Informe ID e PIN.");
-  const link = `${window.location.origin}${window.location.pathname}?id=${encodeURIComponent(id)}`;
-  await navigator.clipboard.writeText(`Link: ${link}\nPIN: ${pin}`);
-  alert("Link + PIN copiados!");
-}
-
-// ---------- admin ----------
-async function adminLogin() {
-  const user = document.getElementById("admUser").value.trim();
-  const pass = document.getElementById("admPass").value.trim();
-  const err = document.getElementById("admError");
-  err.textContent = "";
-
-  const r = await fetch(`${API}/api/admin/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ user, pass })
-  });
-  const d = await r.json();
-  if (!r.ok) { err.textContent = d.error || "Erro"; return; }
-
-  setAdminToken(d.token);
-  window.location.href = "painel.html";
-}
-
-function adminLogout(e) {
-  if (e) e.preventDefault();
-  clearAdminToken();
-  window.location.href = "admin.html";
-}
-
-async function loadTripsPanel() {
-  const token = getAdminToken();
-  if (!token) { window.location.href = "admin.html"; return; }
-
-  const r = await fetch(`${API}/api/admin/trips`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  const d = await r.json();
-  if (!r.ok) return alert(d.error || "Erro ao carregar viagens");
-
-  const cont = document.getElementById("tripsContainer");
-  cont.innerHTML = "";
-
-  d.trips.forEach(t => {
-    const editLink = `${window.location.origin}/editar.html?id=${encodeURIComponent(t.id)}`;
-
-    const card = document.createElement("div");
-    card.className = "card";
-    card.innerHTML = `
-      <div class="row" style="justify-content:space-between;">
-        <div>
-          <h3 style="margin:0;">${t.destination} • ${t.date_iso}</h3>
-          <div class="hint">Responsável: <b>${t.responsible}</b></div>
-          <div class="hint">ID: <b>${t.id}</b></div>
-          <div class="small">Passageiros: ${t.passenger_count} • Docs online: ${t.docs_count}</div>
-          <div class="small">Link edição: ${editLink}</div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start;justify-content:flex-end;">
-          <button class="btn" data-copy="${editLink}">Copiar link</button>
-          <a class="btn primary" href="#" data-xls="${t.id}">Excel</a>
-          <a class="btn primary" href="#" data-doc="${t.id}">Word</a>
-          <a class="btn" href="#" data-zip="${t.id}">ZIP</a>
-          <button class="btn danger" data-del="${t.id}">Apagar arquivos online</button>
-        </div>
-      </div>
-    `;
-
-    card.querySelector('[data-copy]').addEventListener("click", async (e) => {
-      await navigator.clipboard.writeText(e.target.getAttribute("data-copy"));
-      alert("Link copiado!");
-    });
-
-    card.querySelector('[data-xls]').addEventListener("click", (e) => {
-      e.preventDefault();
-      window.open(`${API}/api/exports/${t.id}/excel`, "_blank");
-    });
-
-    card.querySelector('[data-doc]').addEventListener("click", (e) => {
-      e.preventDefault();
-      window.open(`${API}/api/exports/${t.id}/word`, "_blank");
-    });
-
-    card.querySelector('[data-zip]').addEventListener("click", (e) => {
-      e.preventDefault();
-      window.open(`${API}/api/exports/${t.id}/zip`, "_blank");
-    });
-
-    card.querySelector('[data-del]').addEventListener("click", async () => {
-      if (!confirm("Isso vai apagar os documentos do Cloudinary dessa viagem. Continuar?")) return;
-
-      const rr = await fetch(`${API}/api/admin/trips/${t.id}/documents`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` }
+      // Botões ZIP e Apagar
+      els.btnZip?.addEventListener("click", async () => {
+        if (!state.selectedTripId) return;
+        try { await downloadWithAuth(`${API}/api/exports/${state.selectedTripId}/zip`); }
+        catch (e) { alert(e.message); }
       });
-      const dd = await rr.json();
-      if (!rr.ok) return alert(dd.error || "Erro ao apagar");
-      alert(`Arquivos apagados: ${dd.deleted}`);
-      loadTripsPanel();
-    });
 
-    cont.appendChild(card);
+      els.btnApagar?.addEventListener("click", async () => {
+        if (!state.selectedTripId || !confirm("APAGAR viagem e todos os dados?")) return;
+        try {
+          await api.del(`/api/admin/trips/${state.selectedTripId}/purge`, null, true);
+          alert("✅ Viagem apagada!");
+          location.reload();
+        } catch (e) { alert(e.message); }
+      });
+
+      els.btnLogout?.addEventListener("click", () => {
+        localStorage.removeItem("adminToken");
+        location.href = "admin.html";
+      });
+    }
   });
 }
 
-// ---------- masks ----------
-document.addEventListener("input", (e) => {
-  const el = e.target;
-  if (el && el.placeholder === "000.000.000-00") {
-    el.value = formatCPF(el.value);
-  }
-});
+// ==================== TOAST SYSTEM (substitui alert) ====================
+function showToast(message, type = "success") {
+  const toast = document.createElement("div");
+  toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-xl shadow-2xl text-white flex items-center gap-3 z-50 transition-all duration-300 ${
+    type === "success" ? "bg-emerald-600" : type === "error" ? "bg-red-600" : "bg-amber-600"
+  }`;
+  toast.innerHTML = `
+    <span>${message}</span>
+    <button onclick="this.parentElement.remove()" class="ml-4 text-white/70 hover:text-white">✕</button>
+  `;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
+}
 
-// ---------- init ----------
-document.addEventListener("DOMContentLoaded", () => {
-  // auto preencher id via querystring
-  const qid = getQS("id");
-  if (qid && document.getElementById("editTripId")) document.getElementById("editTripId").value = qid;
+// Agora substitua todos os alert() por:
+showToast("Viagem criada com sucesso!", "success");
+showToast("Erro ao salvar passageiro", "error");
 
-  // cadastro
-  if (document.getElementById("btnCreateTrip")) {
-    document.getElementById("btnCreateTrip").addEventListener("click", createTrip);
-    document.getElementById("btnCopyTrip").addEventListener("click", copyTrip);
-    document.getElementById("btnAddPassenger").addEventListener("click", addPassengerFromCadastro);
+function setLoading(btn, isLoading, originalText = "") {
+  if (isLoading) {
+    originalText = btn.textContent;
+    btn.dataset.originalText = originalText;
+    btn.disabled = true;
+    btn.innerHTML = `<span class="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></span> Processando...`;
+  } else {
+    btn.disabled = false;
+    btn.innerHTML = btn.dataset.originalText || originalText;
   }
-
-  // editar
-  if (document.getElementById("btnLoadTrip")) {
-    document.getElementById("btnLoadTrip").addEventListener("click", loadTripForEdit);
-    document.getElementById("btnCopyLinkPin").addEventListener("click", copyLinkPin);
-    document.getElementById("btnCreatePassenger").addEventListener("click", addPassengerFromEdit);
-  }
-
-  // admin
-  if (document.getElementById("btnAdminLogin")) {
-    document.getElementById("btnAdminLogin").addEventListener("click", adminLogin);
-  }
-
-  // painel
-  if (document.getElementById("tripsContainer")) {
-    document.getElementById("btnLogout").addEventListener("click", adminLogout);
-    loadTripsPanel();
-  }
-});
+}

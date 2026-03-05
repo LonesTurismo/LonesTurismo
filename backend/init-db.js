@@ -18,5 +18,6 @@ const schema = fs.readFileSync(schemaPath, "utf-8");
 const db = await open({ filename: DB_PATH, driver: sqlite3.Database });
 await db.exec(schema);
 
-console.log("✅ Banco inicializado com sucesso em:", DB_PATH);
+console.log("✅ Banco SQLite inicializado com sucesso!");
+console.log("📍 Caminho:", DB_PATH);
 await db.close();

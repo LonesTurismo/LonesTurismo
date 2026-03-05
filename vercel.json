@@ -13,8 +13,8 @@
   ],
   "rewrites": [
    
-    { "source": "/api/(.*)", "destination": "https://lonesturismo.onrender.app/api/$1" },
-    { "source": "/health",   "destination": "https://lonesturismo.onrender.app/health" },
+    { "source": "/api/(.*)", "destination": "https://lonesturismo.vercel.app/api/$1" },
+    { "source": "/health",   "destination": "https://lonesturismo.vercel.app/health" },
 
   
     { "source": "/",          "destination": "/frontend/index.html" },

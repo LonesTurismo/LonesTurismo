@@ -11,18 +11,15 @@
       ]
     }
   ],
-  {
-  
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://lones-turismo.onrender.app/api/$1"
+      "destination": "https://lonesturismo.onrender.app/api/$1"
     },
     {
       "source": "/health",
-      "destination": "https://lones-turismo.onrender.app/health"
+      "destination": "https://lonesturismo.onrender.app/health"
     },
-
     {
       "source": "/",
       "destination": "/frontend/index.html"
@@ -43,7 +40,6 @@
       "source": "/editar",
       "destination": "/frontend/editar.html"
     },
-
     {
       "source": "/(.*)",
       "destination": "/frontend/$1"

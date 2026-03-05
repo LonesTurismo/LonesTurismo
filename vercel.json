@@ -16,11 +16,11 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://lonesturismo.onrender.app/api/$1"
+      "destination": "https://lones-turismo.onrender.app/api/$1"
     },
     {
       "source": "/health",
-      "destination": "https://lonesturismo.onrender.app/health"
+      "destination": "https://lones-turismo.onrender.app/health"
     },
 
     {

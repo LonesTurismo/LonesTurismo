@@ -74,7 +74,7 @@ const api = {
     if (!res.ok) {
       if (res.status === 401 && isAdmin) {
         localStorage.removeItem("adminToken");
-        location.href = "admin.html";
+        location.href = "admin";
         return;
       }
       const err = await res.json().catch(() => ({}));
@@ -324,7 +324,7 @@ if ($("#tabs") || $("#btnAdminLogin")) {
     try {
       const data = await api.post("/api/admin/login", { user, pass });
       localStorage.setItem("adminToken", data.token);
-      location.href = "painel.html";
+      location.href = "painel";
     } catch (e) {
       els.admError && (els.admError.textContent = e.message);
     }
@@ -332,7 +332,7 @@ if ($("#tabs") || $("#btnAdminLogin")) {
 
   // ==================== PAINEL EVENTOS ====================
   document.addEventListener("DOMContentLoaded", async () => {
-    if ($("#tabs")) {  // Página painel.html
+    if ($("#tabs")) {  // Página painel
       // Acorda servidor
       fetch(`${API}/health`).catch(() => {});
 
@@ -370,7 +370,7 @@ if ($("#tabs") || $("#btnAdminLogin")) {
 
       els.btnLogout?.addEventListener("click", () => {
         localStorage.removeItem("adminToken");
-        location.href = "admin.html";
+        location.href = "admin";
       });
     }
   });

@@ -493,81 +493,83 @@ if (
   $("#passengerRows")
 ) {
   document.addEventListener("DOMContentLoaded", async () => {
-    hideTripEditor();
+  hideTripEditor();
 
-    const qid = getQS("id");
-    if (qid && $("#editTripId")) $("#editTripId").value = qid;
+  const qid = getQS("id");
+  if (qid && $("#editTripId")) $("#editTripId").value = qid;
 
-    const { tripId, tripPin } = getTripSession();
-    if (tripId && tripPin && $("#passengerRows")) {
-      try {
-        await loadTripData(tripId, tripPin);
-      } catch {
-        clearTripSession();
-        hideTripEditor();
-      }
+  const { tripId, tripPin } = getTripSession();
+
+  // auto carregar apenas na página editar
+  if (tripId && tripPin && $("#editTripId")) {
+    try {
+      await loadTripData(tripId, tripPin);
+    } catch {
+      clearTripSession();
+      hideTripEditor();
+    }
+  }
+
+  document.addEventListener("input", (e) => {
+    if (e.target.classList.contains("row-cpf")) {
+      e.target.value = formatCPF(e.target.value);
     }
 
-    document.addEventListener("input", (e) => {
-      if (e.target.classList.contains("row-cpf")) {
-        e.target.value = formatCPF(e.target.value);
-      }
+    if (e.target.classList.contains("row-phone")) {
+      e.target.value = formatPhone(e.target.value);
+    }
 
-      if (e.target.classList.contains("row-phone")) {
-        e.target.value = formatPhone(e.target.value);
-      }
-
-      if (
-        e.target.classList.contains("row-name") ||
-        e.target.classList.contains("row-cpf") ||
-        e.target.classList.contains("row-phone")
-      ) {
-        updateFilledCount();
-      }
-    });
-
-    $("#btnCreateTrip")?.addEventListener("click", createTrip);
-    $("#btnLoadTrip")?.addEventListener("click", loadTripForEdit);
-    $("#btnSaveRows")?.addEventListener("click", savePassengerRows);
-
-    $("#btnCopyTrip")?.addEventListener("click", async () => {
-      const { tripId, tripPin } = getTripSession();
-      if (!tripId || !tripPin) {
-        showToast("Nenhuma lista criada/carregada ainda", "warning");
-        return;
-      }
-
-      const text = `ID: ${tripId} | PIN: ${tripPin}`;
-
-      try {
-        await navigator.clipboard.writeText(text);
-        showToast("ID + PIN copiados!", "success");
-      } catch {
-        showToast(text, "warning");
-      }
-    });
-
-    $("#btnGoEdit")?.addEventListener("click", () => {
-      const { tripId } = getTripSession();
-      location.href = tripId ? `editar?id=${encodeURIComponent(tripId)}` : "editar";
-    });
-
-    $("#passengerRows")?.addEventListener("click", (e) => {
-      const btn = e.target.closest(".btn-remove-local-file");
-      if (!btn) return;
-
-      const row = btn.closest("tr");
-      const fileInput = row?.querySelector(".row-file");
-      const currentFilesCell = row?.querySelector(".row-current-files");
-
-      if (fileInput) fileInput.value = "";
-      if (currentFilesCell && !row.dataset.passengerId) {
-        currentFilesCell.textContent = "-";
-      }
-
-      showToast("Anexo local removido da linha", "success");
-    });
+    if (
+      e.target.classList.contains("row-name") ||
+      e.target.classList.contains("row-cpf") ||
+      e.target.classList.contains("row-phone")
+    ) {
+      updateFilledCount();
+    }
   });
+
+  $("#btnCreateTrip")?.addEventListener("click", createTrip);
+  $("#btnLoadTrip")?.addEventListener("click", loadTripForEdit);
+  $("#btnSaveRows")?.addEventListener("click", savePassengerRows);
+
+  $("#btnCopyTrip")?.addEventListener("click", async () => {
+    const { tripId, tripPin } = getTripSession();
+    if (!tripId || !tripPin) {
+      showToast("Nenhuma lista criada/carregada ainda", "warning");
+      return;
+    }
+
+    const text = `ID: ${tripId} | PIN: ${tripPin}`;
+
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("ID + PIN copiados!", "success");
+    } catch {
+      showToast(text, "warning");
+    }
+  });
+
+  $("#btnGoEdit")?.addEventListener("click", () => {
+    const { tripId } = getTripSession();
+    location.href = tripId ? `editar?id=${encodeURIComponent(tripId)}` : "editar";
+  });
+
+  $("#passengerRows")?.addEventListener("click", (e) => {
+    const btn = e.target.closest(".btn-remove-local-file");
+    if (!btn) return;
+
+    const row = btn.closest("tr");
+    const fileInput = row?.querySelector(".row-file");
+    const currentFilesCell = row?.querySelector(".row-current-files");
+
+    if (fileInput) fileInput.value = "";
+    if (currentFilesCell && !row.dataset.passengerId) {
+      currentFilesCell.textContent = "-";
+    }
+
+    showToast("Anexo local removido da linha", "success");
+  });
+});
 }
 
 // ==================== PAINEL ADMIN ====================

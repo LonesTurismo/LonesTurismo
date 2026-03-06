@@ -3,85 +3,112 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Lançar Lista</title>
+  <title>Lista | Lones Turismo</title>
   <link rel="stylesheet" href="css/style.css"/>
-  <script src="https://cdn.tailwindcss.com"></script>
-<script>
-  tailwind.config = {
-    content: ["./frontend/**/*.{html,js}"],
-    theme: { extend: { colors: { primary: "#0ea5e9" } } }
-  }
-</script>
 </head>
 <body>
 <header class="topbar">
- <a href="/" class="logo-link">
-  <img src="img/logo-lones.png" alt="Lones Turismo">
-</a>
+  <a href="/" class="logo-link">
+    <img src="img/logo-lones.png" alt="Lones Turismo">
+  </a>
+
   <nav class="menu">
-    <a class="active" href="cadastro">Lançar Lista</a>
-    <a href="editar">Editar Lista</a>
+    <a class="active" href="cadastro">Lista</a>
     <a href="admin">Admin</a>
   </nav>
-  
 </header>
-
 
 <main class="page">
   <div class="container wide">
-    <div class="card">
-      <h2 style="margin:0 0 8px 0;">Adicione os dados para enviar a lista de viagem.</h2>
-      <div class="grid-3">
-        <div>
-          <label>Destino</label>
-          <input id="destination" placeholder="Ex.: Goiânia"/>
-        </div>
-        <div>
-          <label>Data</label>
-          <input id="dateIso" type="date"/>
-        </div>
-        <div>
-          <label>Guia/Vendedora/Responsável</label>
-          <input id="responsible" placeholder="Ex.: Ana"/>
-        </div>
-      </div>
 
-      <div class="row">
-        <button class="btn primary" id="btnCreateTrip">Criar Viagem</button>
+    <section class="card glass">
+      <h1 class="section-title">Lista</h1>
+      <p class="hint">
+        Preencha os dados da viagem e clique em <b>Criar Lista</b>.
+        Depois disso, o sistema vai gerar o <b>ID</b> e o <b>PIN</b> e liberar as linhas de passageiros.
+      </p>
+
+      <form id="createTripForm" class="grid-3" onsubmit="return false;">
+        <div>
+          <label for="destination">Destino</label>
+          <input
+            id="destination"
+            name="destination"
+            type="text"
+            placeholder="Ex.: Aparecida, Caldas Novas, Goiânia"
+            autocomplete="off"
+          />
+        </div>
+
+        <div>
+          <label for="dateIso">Data</label>
+          <input
+            id="dateIso"
+            name="dateIso"
+            type="date"
+          />
+        </div>
+
+        <div>
+          <label for="responsible">Organizador / Responsável</label>
+          <input
+            id="responsible"
+            name="responsible"
+            type="text"
+            placeholder=" Fulano "
+            autocomplete="off"
+          />
+        </div>
+      </form>
+
+      <div class="row actions-top">
+        <button class="btn primary" id="btnCreateTrip" type="button">Criar Lista</button>
         <button class="btn" id="btnCopyTrip" type="button">Copiar ID + PIN</button>
+        <a class="btn" href="editar">Ir para Editar Lista</a>
       </div>
 
-      <div class="hint" id="tripInfo"></div>
-    </div>
+      <div id="tripInfo" class="trip-info empty">
+        Nenhuma lista criada ainda.
+      </div>
+    </section>
 
-    <div class="card">
-      <h2 style="margin:0 0 8px 0;">Adicionar Passageiro</h2>
-      <div class="grid-4">
+    <section id="tripEditor" class="card glass hidden-block">
+      <div class="list-head">
         <div>
-          <label>Nome</label>
-          <input id="pName" maxlength="100"/>
+          <h2 id="tripHeader" class="list-title">Passageiros</h2>
+          <div id="tripHint" class="hint"></div>
         </div>
-        <div>
-          <label>CPF</label>
-          <input id="pCpf" maxlength="14" placeholder="000.000.000-00"/>
-        </div>
-        <div>
-          <label>Telefone</label>
-          <input id="pPhone" maxlength="11" placeholder="(xx) xxxxx-xxxx"/>
-        </div>
-        <div>
-          <label>Docs (até 4)</label>
-          <input id="pDocs" type="file" multiple accept=".jpg,.jpeg,.png"/>
+
+        <div class="counter-card">
+          <span>Passageiros preenchidos</span>
+          <strong id="filledCount">0 / 70</strong>
         </div>
       </div>
 
-      <div class="row">
-        <button class="btn primary" id="btnAddPassenger">Adicionar</button>
-        <a class="btn" href="editar">Ir para edição</a>
+      <div class="table-wrap">
+        <table class="list-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Nome</th>
+              <th>CPF</th>
+              <th>Telefone</th>
+              <th>Arquivo</th>
+              <th>Anexo atual</th>
+              <th>Remover anexo</th>
+            </tr>
+          </thead>
+          <tbody id="passengerRows">
+            <!-- As linhas serão renderizadas pelo app.js -->
+          </tbody>
+        </table>
       </div>
 
-      <div class="hint">Para alterar a lista posteriormente salve o ID + PIN gerado ao criar a viagem.</div>
-    </div>
+      <div class="row footer-actions">
+        <button class="btn primary" id="btnSaveRows" type="button">Salvar Lista</button>
+      </div>
+    </section>
+
   </div>
 </main>
 

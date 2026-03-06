@@ -2,7 +2,7 @@
 // Cadastro • Editar • Admin Login • Painel Admin
 // Compatível com a nova tela "Lista" com 70 linhas de passageiros
 
-const API = "";
+const API = "https://lonesturismo.onrender.com";
 const MAX_PASSENGERS = 70;
 
 // ==================== HELPERS COMPARTILHADOS ====================

@@ -10,14 +10,24 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, "..", "database", "banco.db");
+const DB_PATH =
+  process.env.DB_PATH || path.join(__dirname, "..", "database", "banco.db");
 
 const schemaPath = path.join(__dirname, "schema.sql");
 const schema = fs.readFileSync(schemaPath, "utf-8");
 
-const db = await open({ filename: DB_PATH, driver: sqlite3.Database });
+// garante que a pasta do banco exista
+const dbDir = path.dirname(DB_PATH);
+fs.mkdirSync(dbDir, { recursive: true });
+
+const db = await open({
+  filename: DB_PATH,
+  driver: sqlite3.Database,
+});
+
 await db.exec(schema);
 
 console.log("✅ Banco SQLite inicializado com sucesso!");
 console.log("📍 Caminho:", DB_PATH);
+
 await db.close();

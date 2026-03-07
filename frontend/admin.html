@@ -5,6 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Admin</title>
   <link rel="stylesheet" href="css/style.css"/>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    content: ["./frontend/**/*.{html,js}"],
+    theme: { extend: { colors: { primary: "#0ea5e9" } } }
+  }
+  
 </head>
 <body>
 <header class="topbar">
@@ -15,12 +23,7 @@
     <a href="cadastro">Lista</a>
     <a href="admin">Admin</a>
   </nav>
-  <script src="https://cdn.tailwindcss.com"></script>
-<script>
-  tailwind.config = {
-    content: ["./frontend/**/*.{html,js}"],
-    theme: { extend: { colors: { primary: "#0ea5e9" } } }
-  }
+
 </script>
 </header>
 

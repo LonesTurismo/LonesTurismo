@@ -9,19 +9,19 @@ import fetch from "node-fetch";
 import multer from "multer";
 import crypto from "crypto";
 import ExcelJS from "exceljs";
-import path from "path";
-import fs from "fs";
-import { fileURLToPath } from "url";
+import { PassThrough } from "stream";
 import { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun } from "docx";
 import cloudinary from "./cloudinary.js";
-import sqlite3 from "sqlite3";
-import { open } from "sqlite";
 import { z } from "zod";
 import rateLimit from "express-rate-limit";
+import pg from "pg";
+
+const { Pool } = pg;
 
 dotenv.config();
 
-// ==================== CONFIGURAÇÕES ====================
+require("dotenv").config();
+
 const app = express();
 app.set("trust proxy", 1);
 
@@ -36,13 +36,22 @@ app.use(
 
 const PORT = Number(process.env.PORT || 3001);
 const JWT_SECRET = process.env.JWT_SECRET || "CHANGE_ME";
+const DATABASE_URL = process.env.DATABASE_URL;
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, "..", "database", "banco.db");
+if (!DATABASE_URL) {
+  throw new Error("DATABASE_URL não configurada");
+}
 
-fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: DATABASE_URL.includes("sslmode=require")
+    ? { rejectUnauthorized: false }
+    : false,
+  max: Number(process.env.PG_MAX_CONNECTIONS || 10),
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 15000,
+});
 
-// ==================== RATE LIMIT ====================
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 150,
@@ -60,10 +69,8 @@ const loginLimiter = rateLimit({
 app.use("/api/admin/login", loginLimiter);
 app.use("/api/", generalLimiter);
 
-// ==================== MULTER ====================
 const upload = multer({ storage: multer.memoryStorage() });
 
-// ==================== HELPERS ====================
 const nowIso = () => new Date().toISOString();
 const id8 = () => crypto.randomBytes(4).toString("hex");
 const id12 = () => crypto.randomBytes(6).toString("hex");
@@ -100,55 +107,20 @@ function asyncHandler(fn) {
   return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 }
 
-// ==================== BANCO ====================
-const db = await open({
-  filename: DB_PATH,
-  driver: sqlite3.Database,
-});
+async function q(text, params = []) {
+  return pool.query(text, params);
+}
 
-await db.exec("PRAGMA foreign_keys = ON;");
+async function one(text, params = []) {
+  const result = await q(text, params);
+  return result.rows[0] || null;
+}
 
-await db.exec(`
-  CREATE TABLE IF NOT EXISTS trips (
-    id TEXT PRIMARY KEY,
-    destination TEXT NOT NULL,
-    date_iso TEXT NOT NULL,
-    responsible TEXT NOT NULL,
-    pin_hash TEXT NOT NULL,
-    pin_plain TEXT,
-    created_at TEXT NOT NULL
-  );
+async function many(text, params = []) {
+  const result = await q(text, params);
+  return result.rows;
+}
 
-  CREATE TABLE IF NOT EXISTS passengers (
-    id TEXT PRIMARY KEY,
-    trip_id TEXT NOT NULL,
-    name TEXT NOT NULL,
-    cpf TEXT NOT NULL,
-    phone TEXT,
-    created_at TEXT NOT NULL,
-    UNIQUE (trip_id, cpf),
-    FOREIGN KEY (trip_id) REFERENCES trips(id) ON DELETE CASCADE
-  );
-
-  CREATE TABLE IF NOT EXISTS documents (
-    id TEXT PRIMARY KEY,
-    passenger_id TEXT NOT NULL,
-    filename TEXT NOT NULL,
-    url TEXT NOT NULL,
-    public_id TEXT,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY (passenger_id) REFERENCES passengers(id) ON DELETE CASCADE
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_passengers_trip_id ON passengers(trip_id);
-  CREATE INDEX IF NOT EXISTS idx_documents_passenger_id ON documents(passenger_id);
-`);
-
-try {
-  await db.exec(`ALTER TABLE trips ADD COLUMN pin_plain TEXT;`);
-} catch {}
-
-// ==================== SCHEMAS ====================
 const createTripSchema = z.object({
   destination: z.string().trim().min(3, "Destino deve ter pelo menos 3 caracteres"),
   dateIso: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida (use YYYY-MM-DD)"),
@@ -186,7 +158,6 @@ const adminLoginSchema = z.object({
   pass: z.string().min(1, "Senha é obrigatória"),
 });
 
-// ==================== AUTH ====================
 function authAdmin(req, res, next) {
   try {
     const token = req.headers.authorization?.split(" ")[1];
@@ -205,10 +176,10 @@ function authAdmin(req, res, next) {
 }
 
 async function getTripOr404(tripId, res) {
-  const trip = await db.get(
+  const trip = await one(
     `SELECT id, destination, date_iso, responsible, pin_hash, pin_plain, created_at
      FROM trips
-     WHERE id = ?`,
+     WHERE id = $1`,
     [tripId]
   );
 
@@ -221,7 +192,7 @@ async function getTripOr404(tripId, res) {
 }
 
 async function verifyTripPinOrThrow(tripId, pin) {
-  const trip = await db.get(`SELECT id, pin_hash FROM trips WHERE id = ?`, [tripId]);
+  const trip = await one(`SELECT id, pin_hash FROM trips WHERE id = $1`, [tripId]);
   if (!trip) {
     const err = new Error("Viagem não encontrada");
     err.status = 404;
@@ -239,19 +210,19 @@ async function verifyTripPinOrThrow(tripId, pin) {
 }
 
 async function getPassengersWithDocuments(tripId) {
-  const passengers = await db.all(
+  const passengers = await many(
     `SELECT id, name, cpf, phone, created_at
      FROM passengers
-     WHERE trip_id = ?
+     WHERE trip_id = $1
      ORDER BY created_at ASC`,
     [tripId]
   );
 
   for (const p of passengers) {
-    p.documents = await db.all(
+    p.documents = await many(
       `SELECT id, filename, url, public_id, created_at
        FROM documents
-       WHERE passenger_id = ?
+       WHERE passenger_id = $1
        ORDER BY created_at ASC`,
       [p.id]
     );
@@ -261,8 +232,8 @@ async function getPassengersWithDocuments(tripId) {
 }
 
 async function removePassengerDocumentsFromCloudinary(passengerId) {
-  const docs = await db.all(
-    `SELECT id, public_id FROM documents WHERE passenger_id = ?`,
+  const docs = await many(
+    `SELECT id, public_id FROM documents WHERE passenger_id = $1`,
     [passengerId]
   );
 
@@ -276,12 +247,160 @@ async function removePassengerDocumentsFromCloudinary(passengerId) {
   }
 }
 
-// ==================== HEALTH ====================
-app.get("/health", (req, res) => {
-  res.json({ ok: true });
-});
+async function initDb() {
+  await q(`
+    CREATE TABLE IF NOT EXISTS trips (
+      id TEXT PRIMARY KEY,
+      destination TEXT NOT NULL,
+      date_iso TEXT NOT NULL,
+      responsible TEXT NOT NULL,
+      pin_hash TEXT NOT NULL,
+      pin_plain TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
 
-// ==================== ADMIN LOGIN ====================
+  await q(`
+    CREATE TABLE IF NOT EXISTS passengers (
+      id TEXT PRIMARY KEY,
+      trip_id TEXT NOT NULL REFERENCES trips(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      cpf TEXT NOT NULL,
+      phone TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (trip_id, cpf)
+    );
+  `);
+
+  await q(`
+    CREATE TABLE IF NOT EXISTS documents (
+      id TEXT PRIMARY KEY,
+      passenger_id TEXT NOT NULL REFERENCES passengers(id) ON DELETE CASCADE,
+      filename TEXT NOT NULL,
+      url TEXT NOT NULL,
+      public_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await q(`
+    CREATE TABLE IF NOT EXISTS backups (
+      id TEXT PRIMARY KEY,
+      trigger_type TEXT NOT NULL,
+      backup_url TEXT,
+      public_id TEXT,
+      snapshot JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await q(`CREATE INDEX IF NOT EXISTS idx_passengers_trip_id ON passengers(trip_id);`);
+  await q(`CREATE INDEX IF NOT EXISTS idx_documents_passenger_id ON documents(passenger_id);`);
+  await q(`CREATE INDEX IF NOT EXISTS idx_backups_created_at ON backups(created_at DESC);`);
+}
+
+async function buildBackupSnapshot() {
+  const trips = await many(
+    `SELECT id, destination, date_iso, responsible, pin_plain, created_at
+     FROM trips
+     ORDER BY created_at DESC`
+  );
+
+  const passengers = await many(
+    `SELECT id, trip_id, name, cpf, phone, created_at
+     FROM passengers
+     ORDER BY created_at ASC`
+  );
+
+  const documents = await many(
+    `SELECT id, passenger_id, filename, url, public_id, created_at
+     FROM documents
+     ORDER BY created_at ASC`
+  );
+
+  return {
+    generated_at: nowIso(),
+    totals: {
+      trips: trips.length,
+      passengers: passengers.length,
+      documents: documents.length,
+    },
+    trips,
+    passengers,
+    documents,
+  };
+}
+
+function uploadBackupJson(snapshot, backupId) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify(snapshot, null, 2);
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: "lonestur/backups",
+        resource_type: "raw",
+        public_id: `backup-${backupId}`,
+        overwrite: true,
+        format: "json",
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      }
+    );
+
+    const pass = new PassThrough();
+    pass.end(Buffer.from(payload));
+    pass.pipe(stream);
+  });
+}
+
+async function createBackup(triggerType = "manual") {
+  const backupId = id12();
+  const snapshot = await buildBackupSnapshot();
+
+  let backupUrl = null;
+  let publicId = null;
+
+  try {
+    const uploaded = await uploadBackupJson(snapshot, backupId);
+    backupUrl = uploaded?.secure_url || null;
+    publicId = uploaded?.public_id || null;
+  } catch (err) {
+    console.error("Falha ao enviar backup para Cloudinary:", err);
+  }
+
+  await q(
+    `INSERT INTO backups (id, trigger_type, backup_url, public_id, snapshot, created_at)
+     VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
+    [backupId, triggerType, backupUrl, publicId, JSON.stringify(snapshot), nowIso()]
+  );
+
+  return { id: backupId, trigger_type: triggerType, backup_url: backupUrl, created_at: nowIso() };
+}
+
+let backupTimer = null;
+let pendingTrigger = "auto";
+
+function scheduleBackup(triggerType = "auto") {
+  pendingTrigger = triggerType;
+  if (backupTimer) clearTimeout(backupTimer);
+  backupTimer = setTimeout(async () => {
+    backupTimer = null;
+    try {
+      await createBackup(pendingTrigger);
+      console.log(`Backup automático criado: ${pendingTrigger}`);
+    } catch (err) {
+      console.error("Erro ao criar backup automático:", err);
+    }
+  }, 8000);
+}
+
+app.get("/health", asyncHandler(async (req, res) => {
+  await q("SELECT 1");
+  const lastBackup = await one(`SELECT id, created_at FROM backups ORDER BY created_at DESC LIMIT 1`);
+  res.json({ ok: true, db: "postgres", lastBackupAt: lastBackup?.created_at || null });
+}));
+
 app.post("/api/admin/login", asyncHandler(async (req, res) => {
   const data = adminLoginSchema.parse(req.body);
 
@@ -301,7 +420,6 @@ app.post("/api/admin/login", asyncHandler(async (req, res) => {
   res.json({ success: true, token });
 }));
 
-// ==================== CRIAR VIAGEM ====================
 app.post("/api/trips", asyncHandler(async (req, res) => {
   const data = createTripSchema.parse(req.body);
 
@@ -309,23 +427,23 @@ app.post("/api/trips", asyncHandler(async (req, res) => {
   const pin = pin4();
   const pinHash = await bcrypt.hash(pin, 10);
 
-  await db.run(
+  await q(
     `INSERT INTO trips (id, destination, date_iso, responsible, pin_hash, pin_plain, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
     [tripId, data.destination, data.dateIso, data.responsible, pinHash, pin, nowIso()]
   );
 
-  const trip = await db.get(
+  const trip = await one(
     `SELECT id, destination, date_iso, responsible, pin_plain, created_at
      FROM trips
-     WHERE id = ?`,
+     WHERE id = $1`,
     [tripId]
   );
 
+  scheduleBackup("trip_created");
   res.json({ trip, pin });
 }));
 
-// ==================== VERIFY PIN ====================
 app.post("/api/trips/:id/verify-pin", asyncHandler(async (req, res) => {
   const tripId = String(req.params.id);
   const { pin } = verifyPinSchema.parse(req.body);
@@ -334,18 +452,16 @@ app.post("/api/trips/:id/verify-pin", asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// ==================== CARREGAR VIAGEM POR PIN ====================
-// rota usada pelo frontend novo
 app.post("/api/trips/:id/load", asyncHandler(async (req, res) => {
   const tripId = String(req.params.id);
   const { pin } = verifyPinSchema.parse(req.body);
 
   await verifyTripPinOrThrow(tripId, pin);
 
-  const trip = await db.get(
+  const trip = await one(
     `SELECT id, destination, date_iso, responsible, pin_plain, created_at
      FROM trips
-     WHERE id = ?`,
+     WHERE id = $1`,
     [tripId]
   );
 
@@ -353,7 +469,6 @@ app.post("/api/trips/:id/load", asyncHandler(async (req, res) => {
   res.json({ trip, passengers });
 }));
 
-// rota pública simples, útil para debug/consulta
 app.get("/api/trips/:id", asyncHandler(async (req, res) => {
   const tripId = String(req.params.id);
   const trip = await getTripOr404(tripId, res);
@@ -364,7 +479,6 @@ app.get("/api/trips/:id", asyncHandler(async (req, res) => {
   res.json({ trip: safeTrip, passengers });
 }));
 
-// ==================== ADICIONAR PASSAGEIRO ====================
 app.post("/api/trips/:id/passengers", asyncHandler(async (req, res) => {
   const tripId = String(req.params.id);
   const data = addPassengerSchema.parse(req.body);
@@ -374,9 +488,9 @@ app.post("/api/trips/:id/passengers", asyncHandler(async (req, res) => {
   const passengerId = id12();
 
   try {
-    await db.run(
+    await q(
       `INSERT INTO passengers (id, trip_id, name, cpf, phone, created_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+       VALUES ($1, $2, $3, $4, $5, $6)`,
       [
         passengerId,
         tripId,
@@ -387,16 +501,16 @@ app.post("/api/trips/:id/passengers", asyncHandler(async (req, res) => {
       ]
     );
   } catch (err) {
-    if (String(err.message || "").includes("UNIQUE")) {
+    if (err?.code === "23505") {
       return res.status(409).json({ error: "Já existe um passageiro com esse CPF nesta viagem" });
     }
     throw err;
   }
 
+  scheduleBackup("passenger_created");
   res.json({ ok: true, passengerId });
 }));
 
-// ==================== ATUALIZAR PASSAGEIRO ====================
 app.put("/api/trips/:tripId/passengers/:passengerId", asyncHandler(async (req, res) => {
   const tripId = String(req.params.tripId);
   const passengerId = String(req.params.passengerId);
@@ -404,8 +518,8 @@ app.put("/api/trips/:tripId/passengers/:passengerId", asyncHandler(async (req, r
 
   await verifyTripPinOrThrow(tripId, data.pin);
 
-  const passenger = await db.get(
-    `SELECT id FROM passengers WHERE id = ? AND trip_id = ?`,
+  const passenger = await one(
+    `SELECT id FROM passengers WHERE id = $1 AND trip_id = $2`,
     [passengerId, tripId]
   );
 
@@ -414,10 +528,10 @@ app.put("/api/trips/:tripId/passengers/:passengerId", asyncHandler(async (req, r
   }
 
   try {
-    await db.run(
+    await q(
       `UPDATE passengers
-       SET name = ?, cpf = ?, phone = ?
-       WHERE id = ? AND trip_id = ?`,
+       SET name = $1, cpf = $2, phone = $3
+       WHERE id = $4 AND trip_id = $5`,
       [
         data.name,
         data.cpf,
@@ -427,16 +541,16 @@ app.put("/api/trips/:tripId/passengers/:passengerId", asyncHandler(async (req, r
       ]
     );
   } catch (err) {
-    if (String(err.message || "").includes("UNIQUE")) {
+    if (err?.code === "23505") {
       return res.status(409).json({ error: "Já existe um passageiro com esse CPF nesta viagem" });
     }
     throw err;
   }
 
+  scheduleBackup("passenger_updated");
   res.json({ ok: true });
 }));
 
-// ==================== EXCLUIR PASSAGEIRO ====================
 app.delete("/api/trips/:tripId/passengers/:passengerId", asyncHandler(async (req, res) => {
   const tripId = String(req.params.tripId);
   const passengerId = String(req.params.passengerId);
@@ -444,8 +558,8 @@ app.delete("/api/trips/:tripId/passengers/:passengerId", asyncHandler(async (req
 
   await verifyTripPinOrThrow(tripId, data.pin);
 
-  const passenger = await db.get(
-    `SELECT id FROM passengers WHERE id = ? AND trip_id = ?`,
+  const passenger = await one(
+    `SELECT id FROM passengers WHERE id = $1 AND trip_id = $2`,
     [passengerId, tripId]
   );
 
@@ -454,12 +568,12 @@ app.delete("/api/trips/:tripId/passengers/:passengerId", asyncHandler(async (req
   }
 
   await removePassengerDocumentsFromCloudinary(passengerId);
-  await db.run(`DELETE FROM passengers WHERE id = ? AND trip_id = ?`, [passengerId, tripId]);
+  await q(`DELETE FROM passengers WHERE id = $1 AND trip_id = $2`, [passengerId, tripId]);
 
+  scheduleBackup("passenger_deleted");
   res.json({ ok: true });
 }));
 
-// ==================== UPLOAD DOCUMENTOS ====================
 app.post(
   "/api/trips/:tripId/passengers/:passengerId/documents",
   upload.array("files", 4),
@@ -474,8 +588,8 @@ app.post(
 
     await verifyTripPinOrThrow(tripId, pin);
 
-    const passenger = await db.get(
-      `SELECT id FROM passengers WHERE id = ? AND trip_id = ?`,
+    const passenger = await one(
+      `SELECT id FROM passengers WHERE id = $1 AND trip_id = $2`,
       [passengerId, tripId]
     );
 
@@ -488,8 +602,8 @@ app.post(
       return res.status(400).json({ error: "Nenhum arquivo enviado" });
     }
 
-    const currentCount = await db.get(
-      `SELECT COUNT(*) AS total FROM documents WHERE passenger_id = ?`,
+    const currentCount = await one(
+      `SELECT COUNT(*)::int AS total FROM documents WHERE passenger_id = $1`,
       [passengerId]
     );
 
@@ -510,9 +624,9 @@ app.post(
 
       const docId = id12();
 
-      await db.run(
+      await q(
         `INSERT INTO documents (id, passenger_id, filename, url, public_id, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+         VALUES ($1, $2, $3, $4, $5, $6)`,
         [
           docId,
           passengerId,
@@ -530,14 +644,13 @@ app.post(
       });
     }
 
+    scheduleBackup("documents_uploaded");
     res.json({ ok: true, uploaded });
   })
 );
 
-// ==================== LISTAR VIAGENS ADMIN ====================
-// aceita GET e POST para evitar 405 se o frontend estiver usando um ou outro
 async function listAdminTrips(req, res) {
-  const trips = await db.all(
+  const trips = await many(
     `SELECT id, destination, date_iso, responsible, pin_plain, created_at
      FROM trips
      ORDER BY created_at DESC`
@@ -549,8 +662,6 @@ async function listAdminTrips(req, res) {
 app.get("/api/admin/trips", authAdmin, asyncHandler(listAdminTrips));
 app.post("/api/admin/trips", authAdmin, asyncHandler(listAdminTrips));
 
-// ==================== LISTAR PASSAGEIROS DE UMA VIAGEM (ADMIN) ====================
-// rota usada pelo frontend do painel
 app.post("/api/admin/trips/:id/passengers", authAdmin, asyncHandler(async (req, res) => {
   const tripId = String(req.params.id);
 
@@ -575,17 +686,16 @@ app.get("/api/admin/trips/:id/passengers", authAdmin, asyncHandler(async (req, r
   res.json({ trip: safeTrip, passengers });
 }));
 
-// ==================== EXCLUIR VIAGEM (ADMIN) ====================
 async function deleteAdminTrip(req, res) {
   const tripId = String(req.params.id);
 
-  const trip = await db.get(`SELECT id FROM trips WHERE id = ?`, [tripId]);
+  const trip = await one(`SELECT id FROM trips WHERE id = $1`, [tripId]);
   if (!trip) {
     return res.status(404).json({ error: "Viagem não encontrada" });
   }
 
-  const passengers = await db.all(
-    `SELECT id FROM passengers WHERE trip_id = ?`,
+  const passengers = await many(
+    `SELECT id FROM passengers WHERE trip_id = $1`,
     [tripId]
   );
 
@@ -593,28 +703,27 @@ async function deleteAdminTrip(req, res) {
     await removePassengerDocumentsFromCloudinary(p.id);
   }
 
-  await db.run(`DELETE FROM trips WHERE id = ?`, [tripId]);
+  await q(`DELETE FROM trips WHERE id = $1`, [tripId]);
 
+  scheduleBackup("trip_deleted");
   res.json({ ok: true });
 }
 
 app.delete("/api/admin/trips/:id", authAdmin, asyncHandler(deleteAdminTrip));
-// alias para frontend antigo
 app.delete("/api/admin/trips/:id/purge", authAdmin, asyncHandler(deleteAdminTrip));
 
-// ==================== EXPORTAR XLSX ====================
 app.get("/api/admin/trips/:id/export/xlsx", authAdmin, asyncHandler(async (req, res) => {
   const tripId = String(req.params.id);
 
-  const trip = await db.get(`SELECT * FROM trips WHERE id = ?`, [tripId]);
+  const trip = await one(`SELECT * FROM trips WHERE id = $1`, [tripId]);
   if (!trip) {
     return res.status(404).json({ error: "Viagem não encontrada" });
   }
 
-  const passengers = await db.all(
+  const passengers = await many(
     `SELECT id, name, cpf, phone, created_at
      FROM passengers
-     WHERE trip_id = ?
+     WHERE trip_id = $1
      ORDER BY created_at ASC`,
     [tripId]
   );
@@ -652,19 +761,18 @@ app.get("/api/admin/trips/:id/export/xlsx", authAdmin, asyncHandler(async (req, 
   res.end();
 }));
 
-// ==================== EXPORTAR DOCX ====================
 app.get("/api/admin/trips/:id/export/docx", authAdmin, asyncHandler(async (req, res) => {
   const tripId = String(req.params.id);
 
-  const trip = await db.get(`SELECT * FROM trips WHERE id = ?`, [tripId]);
+  const trip = await one(`SELECT * FROM trips WHERE id = $1`, [tripId]);
   if (!trip) {
     return res.status(404).json({ error: "Viagem não encontrada" });
   }
 
-  const passengers = await db.all(
+  const passengers = await many(
     `SELECT name, cpf, phone, created_at
      FROM passengers
-     WHERE trip_id = ?
+     WHERE trip_id = $1
      ORDER BY created_at ASC`,
     [tripId]
   );
@@ -708,6 +816,7 @@ app.get("/api/admin/trips/:id/export/docx", authAdmin, asyncHandler(async (req, 
           }),
           new Paragraph(`Responsável: ${trip.responsible}`),
           new Paragraph(`Data: ${trip.date_iso}`),
+          new Paragraph(`PIN: ${trip.pin_plain || "-"}`),
           new Paragraph(""),
           new Table({ rows }),
         ],
@@ -726,17 +835,16 @@ app.get("/api/admin/trips/:id/export/docx", authAdmin, asyncHandler(async (req, 
   res.send(buffer);
 }));
 
-// ==================== EXPORTAR ZIP DOCUMENTOS ====================
 async function exportDocumentsZip(req, res) {
   const tripId = String(req.params.id);
 
-  const trip = await db.get(`SELECT * FROM trips WHERE id = ?`, [tripId]);
+  const trip = await one(`SELECT * FROM trips WHERE id = $1`, [tripId]);
   if (!trip) {
     return res.status(404).json({ error: "Viagem não encontrada" });
   }
 
-  const passengers = await db.all(
-    `SELECT id, name FROM passengers WHERE trip_id = ? ORDER BY created_at ASC`,
+  const passengers = await many(
+    `SELECT id, name FROM passengers WHERE trip_id = $1 ORDER BY created_at ASC`,
     [tripId]
   );
 
@@ -755,8 +863,8 @@ async function exportDocumentsZip(req, res) {
   archive.pipe(res);
 
   for (const passenger of passengers) {
-    const docs = await db.all(
-      `SELECT filename, url FROM documents WHERE passenger_id = ? ORDER BY created_at ASC`,
+    const docs = await many(
+      `SELECT filename, url FROM documents WHERE passenger_id = $1 ORDER BY created_at ASC`,
       [passenger.id]
     );
 
@@ -781,15 +889,47 @@ async function exportDocumentsZip(req, res) {
 }
 
 app.get("/api/admin/trips/:id/export/documents.zip", authAdmin, asyncHandler(exportDocumentsZip));
-// alias para frontend antigo
 app.get("/api/exports/:id/zip", authAdmin, asyncHandler(exportDocumentsZip));
 
-// ==================== 405 PADRÃO PARA ROTAS API EXISTENTES ====================
+app.get("/api/admin/backups", authAdmin, asyncHandler(async (req, res) => {
+  const backups = await many(
+    `SELECT id, trigger_type, backup_url, created_at,
+            jsonb_extract_path_text(snapshot, 'totals', 'trips') AS trips_count,
+            jsonb_extract_path_text(snapshot, 'totals', 'passengers') AS passengers_count,
+            jsonb_extract_path_text(snapshot, 'totals', 'documents') AS documents_count
+     FROM backups
+     ORDER BY created_at DESC
+     LIMIT 50`
+  );
+
+  res.json({ backups });
+}));
+
+app.post("/api/admin/backups/run", authAdmin, asyncHandler(async (req, res) => {
+  const backup = await createBackup("manual_admin");
+  res.json({ ok: true, backup });
+}));
+
+app.get("/api/admin/backups/:id/download", authAdmin, asyncHandler(async (req, res) => {
+  const backupId = String(req.params.id);
+  const backup = await one(
+    `SELECT id, snapshot, created_at FROM backups WHERE id = $1`,
+    [backupId]
+  );
+
+  if (!backup) {
+    return res.status(404).json({ error: "Backup não encontrado" });
+  }
+
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="backup-${backupId}.json"`);
+  res.send(JSON.stringify(backup.snapshot, null, 2));
+}));
+
 app.all("/api/*", (req, res) => {
   res.status(404).json({ error: "Rota não encontrada" });
 });
 
-// ==================== TRATAMENTO DE ERROS ====================
 app.use((err, req, res, next) => {
   if (err instanceof z.ZodError) {
     return res.status(400).json({
@@ -804,8 +944,24 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ==================== INICIAR SERVIDOR ====================
-app.listen(PORT, () => {
-  console.log(`Backend rodando na porta ${PORT}`);
-  console.log(`DB_PATH = ${DB_PATH}`);
+async function start() {
+  await initDb();
+  try {
+    const count = await one(`SELECT COUNT(*)::int AS total FROM backups`);
+    if ((count?.total || 0) === 0) {
+      await createBackup("bootstrap");
+    }
+  } catch (err) {
+    console.error("Falha ao criar backup inicial:", err);
+  }
+
+  app.listen(PORT, () => {
+    console.log(`Backend rodando na porta ${PORT}`);
+    console.log("Banco: Neon/Postgres");
+  });
+}
+
+start().catch((err) => {
+  console.error("Falha ao iniciar backend:", err);
+  process.exit(1);
 });

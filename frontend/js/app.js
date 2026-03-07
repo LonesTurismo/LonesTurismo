@@ -496,7 +496,10 @@ if (
   hideTripEditor();
 
   const qid = getQS("id");
+  const qpin = getQS("pin");
+
   if (qid && $("#editTripId")) $("#editTripId").value = qid;
+  if (qpin && $("#editPin")) $("#editPin").value = qpin;
 
   const { tripId, tripPin } = getTripSession();
 
@@ -579,6 +582,7 @@ if ($("#tabs") || $("#btnAdminLogin")) {
     tbody: $("#tbody"),
     titulo: $("#viagemTitulo"),
     info: $("#viagemInfo"),
+    btnEditar: $("#btnEditar"),
     btnZip: $("#btnZip"),
     btnApagar: $("#btnApagar"),
     btnLogout: $("#btnLogout"),
@@ -610,33 +614,34 @@ if ($("#tabs") || $("#btnAdminLogin")) {
   }
 
   function renderTabs(trips) {
-  state.trips = trips || [];
-  if (!els.tabs) return;
+    state.trips = trips || [];
+    if (!els.tabs) return;
 
-  els.tabs.innerHTML = "";
+    els.tabs.innerHTML = "";
 
-  if (els.btnZip) els.btnZip.disabled = !state.trips.length;
-  if (els.btnApagar) els.btnApagar.disabled = !state.trips.length;
+    if (els.btnEditar) els.btnEditar.disabled = !state.trips.length;
+    if (els.btnZip) els.btnZip.disabled = !state.trips.length;
+    if (els.btnApagar) els.btnApagar.disabled = !state.trips.length;
 
-  if (!state.trips.length) {
-    if (els.titulo) els.titulo.textContent = "Nenhuma viagem cadastrada";
-    renderAdminPassengers([]);
-    return;
+    if (!state.trips.length) {
+      if (els.titulo) els.titulo.textContent = "Nenhuma viagem cadastrada";
+      renderAdminPassengers([]);
+      return;
+    }
+
+    const frag = document.createDocumentFragment();
+
+    state.trips.forEach((t, index) => {
+      const b = document.createElement("button");
+      b.className = `tab ${index === 0 ? "active" : ""}`;
+      b.textContent = `${t.destination} (${t.id})`;
+      b.dataset.id = t.id;
+      frag.appendChild(b);
+    });
+
+    els.tabs.appendChild(frag);
+    selectTrip(state.trips[0].id);
   }
-
-  const frag = document.createDocumentFragment();
-
-  state.trips.forEach((t, index) => {
-    const b = document.createElement("button");
-    b.className = `tab ${index === 0 ? "active" : ""}`;
-    b.textContent = `${t.destination} (${t.id})`;
-    b.dataset.id = t.id;
-    frag.appendChild(b);
-  });
-
-  els.tabs.appendChild(frag);
-  selectTrip(state.trips[0].id);
-}
 
   async function selectTrip(tripId) {
     if (state.isLoading) return;
@@ -650,7 +655,7 @@ if ($("#tabs") || $("#btnAdminLogin")) {
 
       if (els.titulo) els.titulo.textContent = sanitize(trip.destination);
       if (els.info) {
-        els.info.textContent = `ID: ${trip.id} • Saída: ${trip.date_iso} • Resp: ${trip.responsible}`;
+        els.info.textContent = `ID: ${trip.id} • PIN: ${trip.pin_plain || "-"} • Saída: ${trip.date_iso} • Resp: ${trip.responsible}`;
       }
 
       const data = await api.post(`/api/admin/trips/${tripId}/passengers`, null, true);
@@ -699,6 +704,19 @@ if ($("#tabs") || $("#btnAdminLogin")) {
         $$(".tab").forEach((b) => b.classList.remove("active"));
         btn.classList.add("active");
         selectTrip(btn.dataset.id);
+      });
+
+      els.btnEditar?.addEventListener("click", () => {
+        if (!state.selectedTripId) return;
+
+        const trip = state.trips.find((t) => t.id === state.selectedTripId);
+        if (!trip) return;
+
+        const url = trip.pin_plain
+          ? `editar?id=${encodeURIComponent(trip.id)}&pin=${encodeURIComponent(trip.pin_plain)}`
+          : `editar?id=${encodeURIComponent(trip.id)}`;
+
+        location.href = url;
       });
 
       els.btnZip?.addEventListener("click", async () => {

@@ -115,6 +115,7 @@ await db.exec(`
     date_iso TEXT NOT NULL,
     responsible TEXT NOT NULL,
     pin_hash TEXT NOT NULL,
+    pin_plain TEXT,
     created_at TEXT NOT NULL
   );
 
@@ -142,6 +143,10 @@ await db.exec(`
   CREATE INDEX IF NOT EXISTS idx_passengers_trip_id ON passengers(trip_id);
   CREATE INDEX IF NOT EXISTS idx_documents_passenger_id ON documents(passenger_id);
 `);
+
+try {
+  await db.exec(`ALTER TABLE trips ADD COLUMN pin_plain TEXT;`);
+} catch {}
 
 // ==================== SCHEMAS ====================
 const createTripSchema = z.object({
@@ -201,7 +206,7 @@ function authAdmin(req, res, next) {
 
 async function getTripOr404(tripId, res) {
   const trip = await db.get(
-    `SELECT id, destination, date_iso, responsible, pin_hash, created_at
+    `SELECT id, destination, date_iso, responsible, pin_hash, pin_plain, created_at
      FROM trips
      WHERE id = ?`,
     [tripId]
@@ -305,13 +310,13 @@ app.post("/api/trips", asyncHandler(async (req, res) => {
   const pinHash = await bcrypt.hash(pin, 10);
 
   await db.run(
-    `INSERT INTO trips (id, destination, date_iso, responsible, pin_hash, created_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [tripId, data.destination, data.dateIso, data.responsible, pinHash, nowIso()]
+    `INSERT INTO trips (id, destination, date_iso, responsible, pin_hash, pin_plain, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [tripId, data.destination, data.dateIso, data.responsible, pinHash, pin, nowIso()]
   );
 
   const trip = await db.get(
-    `SELECT id, destination, date_iso, responsible, created_at
+    `SELECT id, destination, date_iso, responsible, pin_plain, created_at
      FROM trips
      WHERE id = ?`,
     [tripId]
@@ -338,7 +343,7 @@ app.post("/api/trips/:id/load", asyncHandler(async (req, res) => {
   await verifyTripPinOrThrow(tripId, pin);
 
   const trip = await db.get(
-    `SELECT id, destination, date_iso, responsible, created_at
+    `SELECT id, destination, date_iso, responsible, pin_plain, created_at
      FROM trips
      WHERE id = ?`,
     [tripId]
@@ -533,7 +538,7 @@ app.post(
 // aceita GET e POST para evitar 405 se o frontend estiver usando um ou outro
 async function listAdminTrips(req, res) {
   const trips = await db.all(
-    `SELECT id, destination, date_iso, responsible, created_at
+    `SELECT id, destination, date_iso, responsible, pin_plain, created_at
      FROM trips
      ORDER BY created_at DESC`
   );

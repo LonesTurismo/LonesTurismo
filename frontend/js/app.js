@@ -610,30 +610,33 @@ if ($("#tabs") || $("#btnAdminLogin")) {
   }
 
   function renderTabs(trips) {
-    state.trips = trips || [];
-    if (!els.tabs) return;
+  state.trips = trips || [];
+  if (!els.tabs) return;
 
-    els.tabs.innerHTML = "";
+  els.tabs.innerHTML = "";
 
-    if (!state.trips.length) {
-      if (els.titulo) els.titulo.textContent = "Nenhuma viagem cadastrada";
-      renderAdminPassengers([]);
-      return;
-    }
+  if (els.btnZip) els.btnZip.disabled = !state.trips.length;
+  if (els.btnApagar) els.btnApagar.disabled = !state.trips.length;
 
-    const frag = document.createDocumentFragment();
-
-    state.trips.forEach((t, index) => {
-      const b = document.createElement("button");
-      b.className = `tab ${index === 0 ? "active" : ""}`;
-      b.textContent = `${t.destination} (${t.id})`;
-      b.dataset.id = t.id;
-      frag.appendChild(b);
-    });
-
-    els.tabs.appendChild(frag);
-    selectTrip(state.trips[0].id);
+  if (!state.trips.length) {
+    if (els.titulo) els.titulo.textContent = "Nenhuma viagem cadastrada";
+    renderAdminPassengers([]);
+    return;
   }
+
+  const frag = document.createDocumentFragment();
+
+  state.trips.forEach((t, index) => {
+    const b = document.createElement("button");
+    b.className = `tab ${index === 0 ? "active" : ""}`;
+    b.textContent = `${t.destination} (${t.id})`;
+    b.dataset.id = t.id;
+    frag.appendChild(b);
+  });
+
+  els.tabs.appendChild(frag);
+  selectTrip(state.trips[0].id);
+}
 
   async function selectTrip(tripId) {
     if (state.isLoading) return;

@@ -3,33 +3,15 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Lones Turismo</title>
+  <title>Painel Admin • Lones Turismo</title>
   <link rel="stylesheet" href="css/style.css"/>
   <script src="https://cdn.tailwindcss.com"></script>
-<script>
-  tailwind.config = {
-    content: ["./frontend/**/*.{html,js}"],
-    theme: { extend: { colors: { primary: "#0ea5e9" } } }
-  }
-</script>
-</head>
-<body>
-<header class="topbar">
-  <div class="brand">
-    <a href="/" class="logo-link">
-  <img src="img/logo-lones.png" alt="Lones Turismo">
-</a>
-  </div>
-  <nav class="menu">
-    <a href="cadastro">Lista</a>
-    <a href="admin">Admin</a>
-  </nav>
-</header>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Painel Admin • Lones Turismo</title>
-  <link rel="stylesheet" href="css/style.css" />
+  <script>
+    tailwind.config = {
+      content: ["./frontend/**/*.{html,js}"],
+      theme: { extend: { colors: { primary: "#0ea5e9" } } }
+    }
+  </script>
   <style>
     .admin-wrap{ width:min(1120px, 92%); margin: 22px auto; }
     .muted{ opacity:.75; }
@@ -75,11 +57,22 @@
     thead th{ position:sticky; top:0; background: rgba(11,18,32,.9); }
   </style>
 </head>
-
 <body>
+  <header class="topbar">
+    <div class="brand">
+      <a href="/" class="logo-link">
+        <img src="img/logo-lones.png" alt="Lones Turismo">
+      </a>
+    </div>
+    <nav class="menu">
+      <a href="cadastro">Lista</a>
+      <a href="admin">Admin</a>
+    </nav>
+  </header>
+
   <section class="admin-wrap">
     <h2>Painel do Administrador</h2>
-    <p class="muted">Selecione uma viagem e exporte o ZIP (CSV + Word + Documentos).</p>
+    <p class="muted">Selecione uma viagem e visualize os passageiros cadastrados.</p>
 
     <div id="tabs" class="tabs"></div>
 
@@ -91,8 +84,8 @@
         </div>
 
         <div class="panel-actions">
-          <button id="btnZip" class="btn primary" disabled>Exportar ZIP</button>
-          <button id="btnApagar" class="btn danger" disabled>Apagar após baixar</button>
+          <button id="btnZip" class="btn primary">Exportar ZIP</button>
+          <button id="btnApagar" class="btn danger">Apagar viagem</button>
         </div>
       </div>
 
@@ -101,7 +94,7 @@
           <thead>
             <tr>
               <th>Nome</th>
-              <th>Documento</th>
+              <th>CPF</th>
               <th>Telefone</th>
             </tr>
           </thead>

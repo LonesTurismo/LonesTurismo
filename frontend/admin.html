@@ -4,49 +4,83 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Admin</title>
+
   <link rel="stylesheet" href="css/style.css"/>
 
-    <script src="https://cdn.tailwindcss.com"></script>
-<script>
-  tailwind.config = {
-    content: ["./frontend/**/*.{html,js}"],
-    theme: { extend: { colors: { primary: "#0ea5e9" } } }
-  }
-  
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: "#0ea5e9"
+          }
+        }
+      }
+    }
+  </script>
+
 </head>
+
 <body>
+
 <header class="topbar">
   <a href="/" class="logo-link">
-  <img src="img/logo-lones.png" alt="Lones Turismo">
-</a>
+    <img src="img/logo-lones.png" alt="Lones Turismo">
+  </a>
+
   <nav class="menu">
     <a href="cadastro">Lista</a>
     <a href="admin">Admin</a>
   </nav>
-
-</script>
 </header>
 
 <main class="page">
   <div class="container">
-    <div class="card">
-      <h2 style="margin:0 0 8px 0;"> Login Administrativo </h2>
 
-      <label> Usuário </label>
-      <input id="admUser" placeholder="Usuário" autocomplete="off" />
+    <div class="card">
+
+      <h2 style="margin:0 0 8px 0;">Login Administrativo</h2>
+
+      <label>Usuário</label>
+      <input 
+        id="admUser"
+        placeholder="Usuário"
+        autocomplete="off"
+      />
 
       <label>Senha</label>
-      <input id="admPass" type="password" placeholder="Senha" autocomplete="off" />
+      <input 
+        id="admPass"
+        type="password"
+        placeholder="Senha"
+        autocomplete="off"
+      />
+
       <div class="row">
-        <button class="btn primary" id="btnAdminLogin">Entrar</button>
-        <a class="btn" href="admin">Voltar</a>
+
+        <button 
+          class="btn primary"
+          id="btnAdminLogin"
+        >
+          Entrar
+        </button>
+
+        <a class="btn" href="/">
+          Voltar
+        </a>
+
       </div>
 
       <div id="admError" class="error"></div>
+
     </div>
+
   </div>
 </main>
 
 <script src="js/app.js"></script>
+
 </body>
 </html>

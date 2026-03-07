@@ -425,28 +425,44 @@ async function savePassengerRows() {
     return;
   }
 
-  const rows = $$("#passengerRows tr");
+  const rows = [...$$("#passengerRows tr")];
 
   try {
     setLoading(btn, true, "Salvando...");
 
-    for (const row of rows) {
+    // 1) Primeiro valida tudo antes de salvar qualquer linha
+    const preparedRows = rows.map((row, index) => {
       const rowData = getRowData(row);
       const hasExistingPassenger = !!rowData.passengerId;
+      return { row, rowData, hasExistingPassenger, index: index + 1 };
+    });
 
-      if (isRowEmpty(rowData)) {
-        if (hasExistingPassenger) {
-          await api.del(`/api/trips/${tripId}/passengers/${rowData.passengerId}`, { pin: tripPin });
-        }
-        continue;
-      }
+    for (const item of preparedRows) {
+      const { rowData, index } = item;
+
+      if (isRowEmpty(rowData)) continue;
 
       if (!rowData.name) {
-        throw new Error("Todos os passageiros preenchidos precisam ter nome");
+        throw new Error(`A linha ${index} precisa ter nome`);
       }
 
       if (rowData.cpf.length !== 11) {
-        throw new Error(`CPF inválido no passageiro "${rowData.name}"`);
+        throw new Error(`CPF inválido na linha ${index} (${rowData.name})`);
+      }
+    }
+
+    // 2) Se passou na validação, aí sim salva tudo
+    for (const item of preparedRows) {
+      const { row, rowData, hasExistingPassenger } = item;
+
+      if (isRowEmpty(rowData)) {
+        if (hasExistingPassenger) {
+          await api.del(
+            `/api/trips/${tripId}/passengers/${rowData.passengerId}`,
+            { pin: tripPin }
+          );
+        }
+        continue;
       }
 
       if (hasExistingPassenger) {

@@ -650,14 +650,14 @@ if ($("#tabs") || $("#btnAdminLogin")) {
         els.info.textContent = `ID: ${trip.id} • Saída: ${trip.date_iso} • Resp: ${trip.responsible}`;
       }
 
-    try {
-  const data = await api.post("/api/admin/trips", null, true);
-  renderTabs(data.trips || []);
-} catch (e) {
-  if (els.titulo) els.titulo.textContent = "Erro ao carregar viagens";
-  if (els.info) els.info.textContent = e.message || "Falha desconhecida";
-  showToast(e.message || "Erro ao carregar painel", "error");
-}
+      const data = await api.post(`/api/admin/trips/${tripId}/passengers`, null, true);
+      renderAdminPassengers(data.passengers || []);
+    } catch (e) {
+      if (els.titulo) els.titulo.textContent = "Erro ao carregar";
+      showToast(e.message, "error");
+    } finally {
+      state.isLoading = false;
+    }
   }
 
   $("#btnAdminLogin")?.addEventListener("click", async () => {

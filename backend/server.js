@@ -20,8 +20,6 @@ const { Pool } = pg;
 
 dotenv.config();
 
-require("dotenv").config();
-
 const app = express();
 app.set("trust proxy", 1);
 
@@ -844,14 +842,17 @@ async function exportDocumentsZip(req, res) {
   }
 
   const passengers = await many(
-    `SELECT id, name FROM passengers WHERE trip_id = $1 ORDER BY created_at ASC`,
+    `SELECT id, name, cpf, phone, created_at
+     FROM passengers
+     WHERE trip_id = $1
+     ORDER BY created_at ASC`,
     [tripId]
   );
 
   res.setHeader("Content-Type", "application/zip");
   res.setHeader(
     "Content-Disposition",
-    `attachment; filename="${sanitizeName(trip.destination)}-${trip.id}-documentos.zip"`
+    `attachment; filename="${sanitizeName(trip.destination)}-${trip.id}.zip"`
   );
 
   const archive = archiver("zip", { zlib: { level: 9 } });
@@ -862,9 +863,105 @@ async function exportDocumentsZip(req, res) {
 
   archive.pipe(res);
 
+  // =========================
+  // 1) GERAR XLSX EM MEMÓRIA
+  // =========================
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Passageiros");
+
+  worksheet.columns = [
+    { header: "#", key: "index", width: 8 },
+    { header: "Nome", key: "name", width: 35 },
+    { header: "CPF", key: "cpf", width: 20 },
+    { header: "Telefone", key: "phone", width: 20 },
+    { header: "Criado em", key: "created_at", width: 28 },
+  ];
+
+  passengers.forEach((p, i) => {
+    worksheet.addRow({
+      index: i + 1,
+      name: p.name || "",
+      cpf: formatCpfForExport(p.cpf || ""),
+      phone: formatPhoneForExport(p.phone || ""),
+      created_at: p.created_at || "",
+    });
+  });
+
+  const xlsxBuffer = await workbook.xlsx.writeBuffer();
+  archive.append(Buffer.from(xlsxBuffer), {
+    name: `lista-passageiros-${sanitizeName(trip.destination)}-${trip.id}.xlsx`,
+  });
+
+  // =========================
+  // 2) GERAR DOCX EM MEMÓRIA
+  // =========================
+  const rows = [
+    new TableRow({
+      children: [
+        new TableCell({ children: [new Paragraph("#")] }),
+        new TableCell({ children: [new Paragraph("Nome")] }),
+        new TableCell({ children: [new Paragraph("CPF")] }),
+        new TableCell({ children: [new Paragraph("Telefone")] }),
+        new TableCell({ children: [new Paragraph("Criado em")] }),
+      ],
+    }),
+    ...passengers.map(
+      (p, i) =>
+        new TableRow({
+          children: [
+            new TableCell({ children: [new Paragraph(String(i + 1))] }),
+            new TableCell({ children: [new Paragraph(String(p.name || ""))] }),
+            new TableCell({
+              children: [new Paragraph(String(formatCpfForExport(p.cpf || "")))],
+            }),
+            new TableCell({
+              children: [new Paragraph(String(formatPhoneForExport(p.phone || "")))],
+            }),
+            new TableCell({
+              children: [new Paragraph(String(p.created_at || ""))],
+            }),
+          ],
+        })
+    ),
+  ];
+
+  const doc = new Document({
+    sections: [
+      {
+        children: [
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `Lista de passageiros - ${trip.destination}`,
+                bold: true,
+                size: 28,
+              }),
+            ],
+          }),
+          new Paragraph(`Responsável: ${trip.responsible}`),
+          new Paragraph(`Data: ${trip.date_iso}`),
+          new Paragraph(`PIN: ${trip.pin_plain || "-"}`),
+          new Paragraph(""),
+          new Table({ rows }),
+        ],
+      },
+    ],
+  });
+
+  const docxBuffer = await Packer.toBuffer(doc);
+  archive.append(docxBuffer, {
+    name: `lista-passageiros-${sanitizeName(trip.destination)}-${trip.id}.docx`,
+  });
+
+  // =======================================
+  // 3) ADICIONAR DOCUMENTOS DOS PASSAGEIROS
+  // =======================================
   for (const passenger of passengers) {
     const docs = await many(
-      `SELECT filename, url FROM documents WHERE passenger_id = $1 ORDER BY created_at ASC`,
+      `SELECT filename, url
+       FROM documents
+       WHERE passenger_id = $1
+       ORDER BY created_at ASC`,
       [passenger.id]
     );
 
@@ -878,7 +975,10 @@ async function exportDocumentsZip(req, res) {
         const buffer = Buffer.from(await response.arrayBuffer());
         const folderName = sanitizeName(passenger.name || "passageiro");
         const fileName = sanitizeName(d.filename || "arquivo");
-        archive.append(buffer, { name: `${folderName}/${fileName}` });
+
+        archive.append(buffer, {
+          name: `documentos/${folderName}/${fileName}`,
+        });
       } catch (err) {
         console.error("Erro ao baixar documento do Cloudinary:", err);
       }

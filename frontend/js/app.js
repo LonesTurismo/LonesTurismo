@@ -54,6 +54,36 @@ function clearTripSession() {
   sessionStorage.removeItem("tripPin");
 }
 
+function buildTripShareText() {
+  const { tripId, tripPin } = getTripSession();
+  const trip = publicState?.currentTrip || {};
+
+  if (!tripId || !tripPin) return "";
+
+  return [
+    "🚌 Excursão Lones Turismo",
+    "",
+    trip.destination ? `Destino: ${trip.destination}` : null,
+    trip.date_iso || trip.dateIso ? `Data: ${trip.date_iso || trip.dateIso}` : null,
+    trip.responsible ? `Responsável: ${trip.responsible}` : null,
+    "",
+    `ID: ${tripId}`,
+    `PIN: ${tripPin}`,
+    "",
+    "Acesse:",
+    "https://lones-turismo.vercel.app/"
+  ].filter(Boolean).join("\n");
+}
+
+async function shareTripOnWhatsApp() {
+  const text = buildTripShareText();
+  if (!text) {
+    showToast("Crie ou carregue uma lista primeiro", "warning");
+    return;
+  }
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+}
+
 function showEl(el, display = "block") {
   if (el) el.style.display = display;
 }
@@ -568,6 +598,8 @@ if (
     }
   });
 
+  $("#btnWhatsapp")?.addEventListener("click", shareTripOnWhatsApp);
+
   $("#btnGoEdit")?.addEventListener("click", () => {
     const { tripId } = getTripSession();
     location.href = tripId ? `editar?id=${encodeURIComponent(tripId)}` : "editar";
@@ -600,6 +632,8 @@ if ($("#tabs") || $("#btnAdminLogin")) {
     info: $("#viagemInfo"),
     btnEditar: $("#btnEditar"),
     btnZip: $("#btnZip"),
+    btnExcel: $("#btnExcel"),
+    btnDocx: $("#btnDocx"),
     btnApagar: $("#btnApagar"),
     btnLogout: $("#btnLogout"),
     admError: $("#admError")
@@ -637,6 +671,8 @@ if ($("#tabs") || $("#btnAdminLogin")) {
 
     if (els.btnEditar) els.btnEditar.disabled = !state.trips.length;
     if (els.btnZip) els.btnZip.disabled = !state.trips.length;
+    if (els.btnExcel) els.btnExcel.disabled = !state.trips.length;
+    if (els.btnDocx) els.btnDocx.disabled = !state.trips.length;
     if (els.btnApagar) els.btnApagar.disabled = !state.trips.length;
 
     if (!state.trips.length) {
@@ -745,6 +781,26 @@ if ($("#tabs") || $("#btnAdminLogin")) {
         }
       });
 
+      els.btnExcel?.addEventListener("click", async () => {
+        if (!state.selectedTripId) return;
+
+        try {
+          await downloadWithAuth(`${API}/api/admin/trips/${state.selectedTripId}/export/xlsx`, `lista-${state.selectedTripId}.xlsx`);
+        } catch (e) {
+          showToast(e.message, "error");
+        }
+      });
+
+      els.btnDocx?.addEventListener("click", async () => {
+        if (!state.selectedTripId) return;
+
+        try {
+          await downloadWithAuth(`${API}/api/admin/trips/${state.selectedTripId}/export/docx`, `lista-${state.selectedTripId}.docx`);
+        } catch (e) {
+          showToast(e.message, "error");
+        }
+      });
+
       els.btnApagar?.addEventListener("click", async () => {
         if (!state.selectedTripId) return;
         if (!confirm("APAGAR viagem e todos os dados?")) return;
@@ -764,56 +820,4 @@ if ($("#tabs") || $("#btnAdminLogin")) {
       });
     }
   });
-}
-
-function compartilharWhatsapp() {
-
-  const tripId = sessionStorage.getItem("tripId");
-  const tripPin = sessionStorage.getItem("tripPin");
-
-  if (!tripId) {
-    alert("Crie uma lista primeiro");
-    return;
-  }
-
-  const msg =
-`🚌 Excursão Lones Turismo
-
-ID: ${tripId}
-PIN: ${tripPin}
-
-Acesse:
-https://lones-turismo.vercel.app`;
-
-  const url = "https://wa.me/54996660550" + encodeURIComponent(msg);
-
-  window.open(url);
-}
-
-const btnWhatsapp = document.getElementById("btnWhatsapp");
-
-if (btnWhatsapp) {
-  btnWhatsapp
-  const btnExportExcel = document.getElementById("btnExportExcel");
-
-if (btnExportExcel) {
-  btnExportExcel.onclick = () => {
-
-    const token = localStorage.getItem("adminToken");
-    const tripId = window.currentTripId;
-
-    fetch(`${API}/admin/export/excel/${tripId}`,{
-      headers:{
-        Authorization:`Bearer ${token}`
-      }
-    })
-    .then(r=>r.blob())
-    .then(blob=>{
-      const url=URL.createObjectURL(blob);
-      const a=document.createElement("a");
-      a.href=url;
-      a.download="lista.xlsx";
-      a.click();
-    })
-  }
 }

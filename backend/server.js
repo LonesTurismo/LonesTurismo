@@ -64,6 +64,14 @@ const loginLimiter = rateLimit({
   message: { error: "Muitas tentativas de login. Tente novamente em 1 hora." },
 });
 
+const tripAccessLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  message: { error: "Muitas tentativas de ID + PIN. Tente novamente em 15 minutos." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 app.use("/api/admin/login", loginLimiter);
 app.use("/api/", generalLimiter);
 
@@ -170,40 +178,20 @@ function verifyAdminToken(req, res, next) {
     const decoded = jwt.verify(token, JWT_SECRET);
     req.admin = decoded;
     next();
-    
-   } 
-    catch (err) {
+  } catch (err) {
     return res.status(401).json({ error: "Token inválido ou expirado." });
-    const tripAccessLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 min
-    max: 5,
-    message: {
-    error: "Muitas tentativas de ID + PIN. Tente novamente em 15 minutos."
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-    });
- 
   }
 }
-
 
 function authAdmin(req, res, next) {
-  try {
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) return res.status(401).json({ error: "Token ausente" });
-
-    const payload = jwt.verify(token, JWT_SECRET);
-    if (payload.role !== "admin") {
+  return verifyAdminToken(req, res, () => {
+    if (req.admin?.role !== "admin") {
       return res.status(403).json({ error: "Sem permissão" });
     }
-
-    req.admin = payload;
     next();
-  } catch {
-    res.status(401).json({ error: "Token inválido" });
-  }
+  });
 }
+
 
 async function getTripOr404(tripId, res) {
   const trip = await one(
@@ -450,6 +438,25 @@ app.post("/api/admin/login", asyncHandler(async (req, res) => {
   res.json({ success: true, token });
 }));
 
+app.post("/trip/access", tripAccessLimiter, asyncHandler(async (req, res) => {
+  const data = z.object({
+    tripId: z.string().trim().min(1, "ID da viagem é obrigatório"),
+    pin: z.string().trim().min(4, "PIN inválido"),
+  }).parse(req.body);
+
+  await verifyTripPinOrThrow(data.tripId, data.pin);
+
+  const trip = await one(
+    `SELECT id, destination, date_iso, responsible, pin_plain, created_at
+     FROM trips
+     WHERE id = $1`,
+    [data.tripId]
+  );
+
+  const passengers = await getPassengersWithDocuments(data.tripId);
+  res.json({ ok: true, trip, passengers });
+}));
+
 app.post("/api/trips", asyncHandler(async (req, res) => {
   const data = createTripSchema.parse(req.body);
 
@@ -474,7 +481,7 @@ app.post("/api/trips", asyncHandler(async (req, res) => {
   res.json({ trip, pin });
 }));
 
-app.post("/api/trips/:id/verify-pin", asyncHandler(async (req, res) => {
+app.post("/api/trips/:id/verify-pin", tripAccessLimiter, asyncHandler(async (req, res) => {
   const tripId = String(req.params.id);
   const { pin } = verifyPinSchema.parse(req.body);
 
@@ -482,7 +489,7 @@ app.post("/api/trips/:id/verify-pin", asyncHandler(async (req, res) => {
   res.json({ ok: true });
 }));
 
-app.post("/api/trips/:id/load", asyncHandler(async (req, res) => {
+app.post("/api/trips/:id/load", tripAccessLimiter, asyncHandler(async (req, res) => {
   const tripId = String(req.params.id);
   const { pin } = verifyPinSchema.parse(req.body);
 

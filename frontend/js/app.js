@@ -765,3 +765,55 @@ if ($("#tabs") || $("#btnAdminLogin")) {
     }
   });
 }
+
+function compartilharWhatsapp() {
+
+  const tripId = sessionStorage.getItem("tripId");
+  const tripPin = sessionStorage.getItem("tripPin");
+
+  if (!tripId) {
+    alert("Crie uma lista primeiro");
+    return;
+  }
+
+  const msg =
+`🚌 Excursão Lones Turismo
+
+ID: ${tripId}
+PIN: ${tripPin}
+
+Acesse:
+https://lones-turismo.vercel.app`;
+
+  const url = "https://wa.me/54996660550" + encodeURIComponent(msg);
+
+  window.open(url);
+}
+
+const btnWhatsapp = document.getElementById("btnWhatsapp");
+
+if (btnWhatsapp) {
+  btnWhatsapp
+  const btnExportExcel = document.getElementById("btnExportExcel");
+
+if (btnExportExcel) {
+  btnExportExcel.onclick = () => {
+
+    const token = localStorage.getItem("adminToken");
+    const tripId = window.currentTripId;
+
+    fetch(`${API}/admin/export/excel/${tripId}`,{
+      headers:{
+        Authorization:`Bearer ${token}`
+      }
+    })
+    .then(r=>r.blob())
+    .then(blob=>{
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement("a");
+      a.href=url;
+      a.download="lista.xlsx";
+      a.click();
+    })
+  }
+}

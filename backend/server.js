@@ -156,6 +156,38 @@ const adminLoginSchema = z.object({
   pass: z.string().min(1, "Senha é obrigatória"),
 });
 
+function verifyAdminToken(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization || "";
+    const token = authHeader.startsWith("Bearer ")
+      ? authHeader.slice(7)
+      : null;
+
+    if (!token) {
+      return res.status(401).json({ error: "Token ausente." });
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.admin = decoded;
+    next();
+    
+   } 
+    catch (err) {
+    return res.status(401).json({ error: "Token inválido ou expirado." });
+    const tripAccessLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 min
+    max: 5,
+    message: {
+    error: "Muitas tentativas de ID + PIN. Tente novamente em 15 minutos."
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+    });
+ 
+  }
+}
+
+
 function authAdmin(req, res, next) {
   try {
     const token = req.headers.authorization?.split(" ")[1];

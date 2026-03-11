@@ -570,16 +570,34 @@ if (
   const btnCopy = $("#btnCopyTrip");
   const btnWhats = $("#btnWhatsapp");
   const btnSave = $("#btnSaveRows");
+  const btnGoEdit = $("#btnGoEdit");
   
-  if (btnCopy) btnCopy.disabled = true;
-  if (btnWhats) btnWhats.disabled = true;
-  if (btnSave) btnSave.disabled = true;
-
-  function enableActionButtons() {
-    if (btnCopy) btnCopy.disabled = false;
-    if (btnWhats) btnWhats.disabled = false;
-    if (btnSave) btnSave.disabled = false;
+  // Função para desabilitar visualmente os botões
+  function disableActionButtons() {
+    const buttons = [btnCopy, btnWhats, btnSave, btnGoEdit];
+    buttons.forEach(btn => {
+      if (btn) {
+        btn.disabled = true;
+        btn.classList.add("opacity-50", "cursor-not-allowed");
+        btn.setAttribute("aria-disabled", "true");
+      }
+    });
   }
+
+  // Função para habilitar os botões
+  function enableActionButtons() {
+    const buttons = [btnCopy, btnWhats, btnSave, btnGoEdit];
+    buttons.forEach(btn => {
+      if (btn) {
+        btn.disabled = false;
+        btn.classList.remove("opacity-50", "cursor-not-allowed");
+        btn.removeAttribute("aria-disabled");
+      }
+    });
+  }
+
+  // Inicializar botões desabilitados
+  disableActionButtons();
 
   const qid = getQS("id");
   const qpin = getQS("pin");
@@ -825,6 +843,14 @@ if ($("#tabs") || $("#btnAdminLogin")) {
 
   document.addEventListener("DOMContentLoaded", async () => {
     if ($("#tabs")) {
+      // Verificar autenticação ao carregar o painel
+      const token = localStorage.getItem("adminToken");
+      if (!token) {
+        // Redirecionar para login se não houver token
+        window.location.href = "admin";
+        return;
+      }
+
       fetch(`${API}/health`).catch(() => {});
 
       try {

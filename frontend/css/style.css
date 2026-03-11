@@ -125,6 +125,20 @@ body{
   border: none;
   color: #07101f;
 }
+.btn:disabled,
+.btn.disabled,
+.btn[disabled],
+.btn.opacity-50,
+.btn.cursor-not-allowed {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+  pointer-events: none;
+}
+
+/* Hidden utility */
+.hidden-block {
+  display: none !important;
+}
 
 /* Hero */
 .hero{

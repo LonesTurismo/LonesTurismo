@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Painel Admin • Lones Turismo</title>
-<link rel="stylesheet" href="/frontend/css/style.css"/>
+  <link rel="stylesheet" href="/frontend/css/style.css"/>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -15,7 +15,6 @@
   <style>
     .admin-wrap{ width:min(1120px, 92%); margin: 22px auto; }
     .muted{ opacity:.75; }
-
     .tabs{ display:flex; gap:10px; flex-wrap:wrap; margin:14px 0 14px; }
     .tab{
       border:1px solid rgba(255,255,255,.12);
@@ -27,7 +26,6 @@
       font-weight:800;
     }
     .tab.active{ background: rgba(255,255,255,.12); }
-
     .panel{
       border:1px solid rgba(255,255,255,.12);
       background: rgba(255,255,255,.05);
@@ -39,7 +37,6 @@
       flex-wrap:wrap; margin-bottom: 12px;
     }
     .panel-actions{ display:flex; gap:10px; flex-wrap:wrap; }
-
     .btn{
       display:inline-flex; align-items:center; justify-content:center;
       padding:12px 16px; border-radius:14px;
@@ -50,18 +47,21 @@
     }
     .btn.primary{ background: linear-gradient(135deg, rgba(0,160,255,.95), rgba(0,255,180,.85)); border:none; color:#07101f; }
     .btn.danger{ background: rgba(255,70,70,.15); border-color: rgba(255,70,70,.35); }
-
     .table-wrap{ overflow:auto; border-radius: 14px; }
     table{ width:100%; border-collapse: collapse; min-width: 680px; }
     th, td{ padding:12px 12px; border-bottom: 1px solid rgba(255,255,255,.10); text-align:left; }
     thead th{ position:sticky; top:0; background: rgba(11,18,32,.9); }
+
+    #painelContent {
+      display: none;
+    }
   </style>
 </head>
-<body style="display: none;">
+<body>
   <header class="topbar">
     <div class="brand">
       <a href="/" class="logo-link">
-<img src="/frontend/img/logo-lones.png" alt="Lones Turismo">
+        <img src="/frontend/img/logo-lones.png" alt="Lones Turismo">
       </a>
     </div>
     <nav class="menu">
@@ -70,58 +70,48 @@
     </nav>
   </header>
 
-  <section class="admin-wrap">
-    <h2>Painel do Administrador</h2>
-    <p class="muted">Selecione uma viagem e visualize os passageiros cadastrados.</p>
+  <main id="painelContent">
+    <section class="admin-wrap">
+      <h2>Painel do Administrador</h2>
+      <p class="muted">Selecione uma viagem e visualize os passageiros cadastrados.</p>
 
-    <div id="tabs" class="tabs"></div>
+      <div id="tabs" class="tabs"></div>
 
-    <div class="panel">
-      <div class="panel-top">
-        <div>
-          <h3 id="viagemTitulo">Selecione uma viagem</h3>
-          <p id="viagemInfo" class="muted"></p>
+      <div class="panel">
+        <div class="panel-top">
+          <div>
+            <h3 id="viagemTitulo">Selecione uma viagem</h3>
+            <p id="viagemInfo" class="muted"></p>
+          </div>
+
+          <div class="panel-actions">
+            <button id="btnEditar" class="btn" disabled>Editar lista</button>
+            <button id="btnZip" class="btn primary" disabled>Exportar ZIP</button>
+            <button id="btnExcel" class="btn" disabled>Exportar Excel</button>
+            <button id="btnDocx" class="btn" disabled>Exportar Documento</button>
+            <button id="btnApagar" class="btn danger" disabled>Apagar após baixar</button>
+            <button id="btnLogout" class="btn">Sair</button>
+          </div>
         </div>
 
-        <div class="panel-actions">
-          <button id="btnEditar" class="btn" disabled>Editar lista</button>
-          <button id="btnZip" class="btn primary" disabled>Exportar ZIP</button>
-          <button id="btnExcel" class="btn" disabled>Exportar Excel</button>
-          <button id="btnDocx" class="btn" disabled>Exportar Documento</button>
-          <button id="btnApagar" class="btn danger" disabled>Apagar após baixar</button>
-          <button id="btnLogout" class="btn">Sair</button>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>CPF</th>
+                <th>Telefone</th>
+              </tr>
+            </thead>
+            <tbody id="tbody">
+              <tr><td colspan="3" class="muted">Nenhuma viagem selecionada.</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
+    </section>
+  </main>
 
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Nome</th>
-              <th>CPF</th>
-              <th>Telefone</th>
-            </tr>
-          </thead>
-          <tbody id="tbody">
-            <tr><td colspan="3" class="muted">Nenhuma viagem selecionada.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-
-<script>
-    // Protect panel content - hide until authenticated
-    (function() {
-      const token = localStorage.getItem("adminToken");
-      if (!token) {
-        window.location.href = "/admin";
-        return;
-      }
-      // Show content only after token check
-      document.body.style.display = "block";
-    })();
-  </script>
   <script src="/frontend/js/app.js"></script>
 </body>
 </html>

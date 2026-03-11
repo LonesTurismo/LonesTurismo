@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Admin</title>
 
-<link rel="stylesheet" href="/frontend/css/style.css"/>
+  <link rel="stylesheet" href="/frontend/css/style.css"/>
 
   <script src="https://cdn.tailwindcss.com"></script>
 
@@ -14,20 +14,18 @@
       theme: {
         extend: {
           colors: {
-            primary: "black"
+            primary: "#0ea5e9"
           }
         }
       }
     }
   </script>
-
 </head>
 
 <body>
-
 <header class="topbar">
   <a href="/" class="logo-link">
-<img src="/frontend/img/logo-lones.png" alt="Lones Turismo">
+    <img src="/frontend/img/logo-lones.png" alt="Lones Turismo">
   </a>
 
   <nav class="menu">
@@ -38,20 +36,18 @@
 
 <main class="page">
   <div class="container">
-
     <div class="card">
-
       <h2 style="margin:0 0 8px 0;">Login Administrativo</h2>
 
       <label>Usuário</label>
-      <input 
+      <input
         id="admUser"
         placeholder="Usuário"
         autocomplete="off"
       />
 
       <label>Senha</label>
-      <input 
+      <input
         id="admPass"
         type="password"
         placeholder="Senha"
@@ -59,28 +55,20 @@
       />
 
       <div class="row">
-
-        <button 
-          class="btn primary"
-          id="btnAdminLogin"
-        >
+        <button class="btn primary" id="btnAdminLogin">
           Entrar
         </button>
 
         <a class="btn" href="/">
           Voltar
         </a>
-
       </div>
 
       <div id="admError" class="error"></div>
-
     </div>
-
   </div>
 </main>
 
 <script src="/frontend/js/app.js"></script>
-
 </body>
 </html>

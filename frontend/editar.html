@@ -4,45 +4,49 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Editar Lista</title>
-<link rel="stylesheet" href="/frontend/css/style.css"/>
+  <link rel="stylesheet" href="/frontend/css/style.css"/>
   <script src="https://cdn.tailwindcss.com"></script>
-<script>
-  tailwind.config = {
-    content: ["./frontend/**/*.{html,js}"],
-    theme: { extend: { colors: { primary: "#0ea5e9" } } }
-  }
-</script>
+  <script>
+    tailwind.config = {
+      content: ["./frontend/**/*.{html,js}"],
+      theme: { extend: { colors: { primary: "#0ea5e9" } } }
+    }
+  </script>
 </head>
 <body>
 <header class="topbar">
   <a href="/" class="logo-link">
-<img src="/frontend/img/logo-lones.png" alt="Lones Turismo">
-</a>
+    <img src="/frontend/img/logo-lones.png" alt="Lones Turismo">
+  </a>
+
   <nav class="menu">
     <a href="/cadastro">Lista</a>
     <a href="/admin">Admin</a>
   </nav>
-  
 </header>
 
 <main class="page">
   <div class="container wide">
     <div class="card">
       <h2 style="margin:0 0 8px 0;">Acessar Viagem por ID + PIN</h2>
+
       <div class="grid-3">
         <div>
           <label>ID da Viagem</label>
           <input id="editTripId" placeholder="Ex.: GOI-20260320-01"/>
         </div>
+
         <div>
           <label>PIN</label>
           <input id="editPin" maxlength="4" placeholder="0000"/>
         </div>
+
         <div style="display:flex;align-items:flex-end;justify-content:flex-end;">
           <button class="btn primary" id="btnLoadTrip">Carregar</button>
         </div>
       </div>
 
+      <div id="editError" class="error"></div>
     </div>
 
     <div class="card" id="editArea" style="display:none;">
@@ -53,34 +57,31 @@
         </div>
         <a class="btn" href="/editar">Voltar</a>
       </div>
+
       <div class="divider"></div>
 
-      <div class="card" style="border-style:dashed;">
-        <h3 style="margin:0 0 8px 0;">Adicionar Passageiro</h3>
-        <div class="grid-4">
-          <div>
-            <label>Nome</label>
-            <input id="newName" maxlength="100"/>
-          </div>
-          <div>
-            <label>CPF</label>
-            <input id="newCpf" maxlength="14" placeholder="000.000.000-00"/>
-          </div>
-          <div>
-            <label>Telefone (13)</label>
-            <input id="newPhone" maxlength="13"/>
-          </div>
-          <div>
-            <label>Docs (até 4)</label>
-            <input id="newDocs" type="file" multiple accept=".jpg,.jpeg,.png,.pdf"/>
-          </div>
-        </div>
-        <div class="row">
-          <button class="btn primary" id="btnCreatePassenger">Adicionar</button>
-        </div>
-      </div>
       <h3 style="margin:0 0 10px 0;">Passageiros</h3>
-      <div id="passList"></div>
+
+      <div class="table-wrap">
+        <table class="list-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Nome</th>
+              <th>CPF</th>
+              <th>Telefone</th>
+              <th>Arquivo</th>
+              <th>Anexo atual</th>
+              <th>Remover anexo</th>
+            </tr>
+          </thead>
+          <tbody id="passengerRows"></tbody>
+        </table>
+      </div>
+
+      <div class="row footer-actions">
+        <button class="btn primary" id="btnSaveRows" type="button">Salvar Lista</button>
+      </div>
     </div>
   </div>
 </main>

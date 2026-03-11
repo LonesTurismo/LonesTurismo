@@ -1,23 +1,19 @@
-// ==================== app.js - ÚNICO ARQUIVO PARA TODO O SITE ====================
+// ==================== app.js ====================
 // Cadastro • Editar • Admin Login • Painel Admin
-// Compatível com a nova tela "Lista" com 70 linhas de passageiros
 
-// API Configuration - Detect environment automatically
 const getApiBaseUrl = () => {
-  // Check if running on localhost or production
-  const isLocalhost = window.location.hostname === 'localhost' || 
-                      window.location.hostname === '127.0.0.1';
-  
-  if (isLocalhost) {
-    return "http://localhost:3001";
-  }
-  return "https://lones-turismo.vercel.app";
+  const isLocalhost =
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1";
+
+  if (isLocalhost) return "http://localhost:3001";
+  return window.location.origin;
 };
 
 const API = getApiBaseUrl();
 const MAX_PASSENGERS = 70;
 
-// ==================== HELPERS COMPARTILHADOS ====================
+// ==================== HELPERS ====================
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 const getQS = (name) => new URLSearchParams(location.search).get(name);
@@ -25,8 +21,7 @@ const getQS = (name) => new URLSearchParams(location.search).get(name);
 const onlyDigits = (str) => (str || "").replace(/\D/g, "");
 
 const formatCPF = (val) => {
-  let cpf = onlyDigits(val).slice(0, 11);
-
+  const cpf = onlyDigits(val).slice(0, 11);
   if (cpf.length <= 3) return cpf;
   if (cpf.length <= 6) return cpf.replace(/(\d{3})(\d+)/, "$1.$2");
   if (cpf.length <= 9) return cpf.replace(/(\d{3})(\d{3})(\d+)/, "$1.$2.$3");
@@ -34,8 +29,7 @@ const formatCPF = (val) => {
 };
 
 const formatPhone = (val) => {
-  let phone = onlyDigits(val).slice(0, 11);
-
+  const phone = onlyDigits(val).slice(0, 11);
   if (phone.length <= 2) return phone;
   if (phone.length <= 6) return phone.replace(/(\d{2})(\d+)/, "($1) $2");
   if (phone.length <= 10) return phone.replace(/(\d{2})(\d{4})(\d+)/, "($1) $2-$3");
@@ -66,39 +60,6 @@ function clearTripSession() {
   sessionStorage.removeItem("tripPin");
 }
 
-function buildTripShareText() {
-  const { tripId, tripPin } = getTripSession();
-  const trip = publicState?.currentTrip || {};
-
-  if (!tripId || !tripPin) return "";
-
-  // Get the current base URL for sharing
-  const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/');
-
-  return [
-    "🚌 Excursão Lones Turismo",
-    "",
-    trip.destination ? `Destino: ${trip.destination}` : null,
-    trip.date_iso || trip.dateIso ? `Data: ${trip.date_iso || trip.dateIso}` : null,
-    trip.responsible ? `Responsável: ${trip.responsible}` : null,
-    "",
-    `ID: ${tripId}`,
-    `PIN: ${tripPin}`,
-    "",
-    "Acesse:",
-    baseUrl
-  ].filter(Boolean).join("\n");
-}
-
-async function shareTripOnWhatsApp() {
-  const text = buildTripShareText();
-  if (!text) {
-    showToast("Crie ou carregue uma lista primeiro", "warning");
-    return;
-  }
-  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
-}
-
 function showEl(el, display = "block") {
   if (el) el.style.display = display;
 }
@@ -113,7 +74,7 @@ function setLoading(btn, isLoading, loadingText = "Processando...") {
   if (isLoading) {
     btn.dataset.originalText = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = `<span class="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2"></span>${loadingText}`;
+    btn.innerHTML = loadingText;
   } else {
     btn.disabled = false;
     btn.innerHTML = btn.dataset.originalText || btn.innerHTML;
@@ -122,59 +83,52 @@ function setLoading(btn, isLoading, loadingText = "Processando...") {
 
 function showToast(message, type = "success") {
   const toast = document.createElement("div");
-  toast.className = `fixed bottom-4 right-4 px-5 py-3 rounded-xl shadow-2xl text-white flex items-center gap-3 z-50 transition-all duration-300 ${
+  toast.className = `fixed bottom-4 right-4 px-5 py-3 rounded-xl shadow-2xl text-white z-50 ${
     type === "success"
       ? "bg-emerald-600"
       : type === "error"
       ? "bg-red-600"
-      : "bg-amber-600"
+      : "bg-yellow-600"
   }`;
-
-  toast.innerHTML = `
-    <span>${sanitize(message)}</span>
-    <button type="button" class="ml-2 text-white/80 hover:text-white">✕</button>
-  `;
-
-  toast.querySelector("button")?.addEventListener("click", () => toast.remove());
+  toast.textContent = message;
   document.body.appendChild(toast);
 
   setTimeout(() => {
-    if (toast.parentNode) toast.remove();
-  }, 4000);
+    toast.remove();
+  }, 2500);
 }
 
-// ==================== API CLIENT ====================
+// ==================== API ====================
 const api = {
-  async request(endpoint, method = "POST", body = null, isAdmin = false) {
+  async request(ep, method = "GET", body = null, admin = false) {
     const headers = {};
 
-    if (!(body instanceof FormData)) {
+    if (body && !(body instanceof FormData)) {
       headers["Content-Type"] = "application/json";
     }
 
-    if (isAdmin) {
+    if (admin) {
       const token = localStorage.getItem("adminToken");
-      if (token) headers.Authorization = `Bearer ${token}`;
+      if (token) headers["Authorization"] = `Bearer ${token}`;
     }
 
-    const res = await fetch(`${API}${endpoint}`, {
+    const res = await fetch(`${API}${ep}`, {
       method,
       headers,
-      body:
-        body instanceof FormData
+      body: body
+        ? body instanceof FormData
           ? body
-          : body
-          ? JSON.stringify(body)
-          : null
+          : JSON.stringify(body)
+        : undefined
     });
 
-    if (!res.ok) {
-      if (res.status === 401 && isAdmin) {
-        localStorage.removeItem("adminToken");
-        location.href = "admin";
-        return;
-      }
+    if (res.status === 401 && admin) {
+      localStorage.removeItem("adminToken");
+      location.href = "/admin";
+      return;
+    }
 
+    if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || `Erro ${res.status}`);
     }
@@ -211,7 +165,7 @@ const downloadWithAuth = async (url, fallbackName = "viagem.zip") => {
   URL.revokeObjectURL(a.href);
 };
 
-// ==================== UPLOAD DE DOCUMENTOS ====================
+// ==================== UPLOAD DOCUMENTOS ====================
 async function uploadDocs(tripId, passengerId, pin, files) {
   if (!files?.length) return;
   if (files.length > 4) throw new Error("Máximo 4 arquivos");
@@ -229,23 +183,27 @@ async function uploadDocs(tripId, passengerId, pin, files) {
   if (!res.ok) throw new Error(json.error || "Erro no upload");
 }
 
-// ==================== ESTADO PÚBLICO ====================
+// ==================== ESTADO ====================
 const publicState = {
   currentTrip: null,
   currentPassengers: []
 };
 
-// ==================== FUNÇÕES DA TELA PÚBLICA ====================
+// ==================== TELA PÚBLICA ====================
 function getTripEditor() {
-  return $("#tripEditor");
+  return $("#tripEditor") || $("#editArea");
 }
 
 function showTripEditor() {
-  showEl(getTripEditor(), "block");
+  const cadastroEditor = $("#tripEditor");
+  const editArea = $("#editArea");
+  if (cadastroEditor) showEl(cadastroEditor, "block");
+  if (editArea) showEl(editArea, "block");
 }
 
 function hideTripEditor() {
-  hideEl(getTripEditor());
+  hideEl($("#tripEditor"));
+  hideEl($("#editArea"));
 }
 
 function updateFilledCount() {
@@ -259,7 +217,6 @@ function updateFilledCount() {
     const name = row.querySelector(".row-name")?.value.trim();
     const cpf = onlyDigits(row.querySelector(".row-cpf")?.value || "");
     const phone = onlyDigits(row.querySelector(".row-phone")?.value || "");
-
     if (name || cpf || phone) filled++;
   });
 
@@ -345,7 +302,11 @@ function setTripInfo(trip, pin = "") {
 
   const tripHeader = $("#tripHeader");
   if (tripHeader) {
-    tripHeader.textContent = "Passageiros";
+    if ($("#editArea")) {
+      tripHeader.textContent = `🆔 ${trip.id} • ${trip.destination} • ${trip.date_iso || trip.dateIso || ""}`;
+    } else {
+      tripHeader.textContent = "Passageiros";
+    }
   }
 
   const tripHint = $("#tripHint");
@@ -377,7 +338,6 @@ async function createTrip() {
     renderPassengerRows([]);
     showTripEditor();
 
-    // Habilitar botões de ação após criar viagem
     if (window.__enableActionButtons) {
       window.__enableActionButtons();
     }
@@ -388,21 +348,6 @@ async function createTrip() {
   } finally {
     setLoading(btn, false);
   }
-}
-
-async function addPassenger(tripId, pin, name, cpf, phone, files) {
-  const data = await api.post(`/api/trips/${tripId}/passengers`, {
-    pin,
-    name,
-    cpf,
-    phone
-  });
-
-  if (files?.length) {
-    await uploadDocs(tripId, data.passengerId, pin, files);
-  }
-
-  return data;
 }
 
 async function loadTripData(tripId, pin) {
@@ -417,17 +362,8 @@ async function loadTripData(tripId, pin) {
   renderPassengerRows(publicState.currentPassengers);
   showTripEditor();
 
-  // Habilitar botões de ação após carregar viagem
   if (window.__enableActionButtons) {
     window.__enableActionButtons();
-  }
-
-  if ($("#editArea")) showEl($("#editArea"), "block");
-  if ($("#tripHeader") && data.trip?.id) {
-    $("#tripHeader").textContent = `🆔 ${data.trip.id} • ${data.trip.destination} • ${data.trip.date_iso}`;
-  }
-  if ($("#tripHint") && data.trip?.responsible) {
-    $("#tripHint").textContent = `Responsável: ${data.trip.responsible}`;
   }
 }
 
@@ -471,6 +407,21 @@ function isRowEmpty(rowData) {
   return !rowData.name && !rowData.cpf && !rowData.phone && !rowData.files?.length;
 }
 
+async function addPassenger(tripId, pin, name, cpf, phone, files) {
+  const data = await api.post(`/api/trips/${tripId}/passengers`, {
+    pin,
+    name,
+    cpf,
+    phone
+  });
+
+  if (files?.length) {
+    await uploadDocs(tripId, data.passengerId, pin, files);
+  }
+
+  return data;
+}
+
 async function savePassengerRows() {
   const btn = $("#btnSaveRows");
   const { tripId, tripPin } = getTripSession();
@@ -485,7 +436,6 @@ async function savePassengerRows() {
   try {
     setLoading(btn, true, "Salvando...");
 
-    // 1) Primeiro valida tudo antes de salvar qualquer linha
     const preparedRows = rows.map((row, index) => {
       const rowData = getRowData(row);
       const hasExistingPassenger = !!rowData.passengerId;
@@ -506,16 +456,12 @@ async function savePassengerRows() {
       }
     }
 
-    // 2) Se passou na validação, aí sim salva tudo
     for (const item of preparedRows) {
       const { row, rowData, hasExistingPassenger } = item;
 
       if (isRowEmpty(rowData)) {
         if (hasExistingPassenger) {
-          await api.del(
-            `/api/trips/${tripId}/passengers/${rowData.passengerId}`,
-            { pin: tripPin }
-          );
+          await api.del(`/api/trips/${tripId}/passengers/${rowData.passengerId}`, { pin: tripPin });
         }
         continue;
       }
@@ -557,401 +503,371 @@ async function savePassengerRows() {
 }
 
 // ==================== EVENTOS PÚBLICOS ====================
-if (
-  $("#btnCreateTrip") ||
-  $("#editTripId") ||
-  $("#btnSaveRows") ||
-  $("#passengerRows")
-) {
-  document.addEventListener("DOMContentLoaded", async () => {
-  hideTripEditor();
+document.addEventListener("DOMContentLoaded", async () => {
+  const hasPublicPage =
+    $("#btnCreateTrip") ||
+    $("#btnLoadTrip") ||
+    $("#btnSaveRows") ||
+    $("#passengerRows");
 
-  // Desabilitar botões de ação até que lista seja criada
-  const btnCopy = $("#btnCopyTrip");
-  const btnWhats = $("#btnWhatsapp");
-  const btnSave = $("#btnSaveRows");
-  const btnGoEdit = $("#btnGoEdit");
-  
-  // Função para desabilitar visualmente os botões
-  function disableActionButtons() {
-    const buttons = [btnCopy, btnWhats, btnSave, btnGoEdit];
-    buttons.forEach(btn => {
-      if (btn) {
-        btn.disabled = true;
-        btn.classList.add("opacity-50", "cursor-not-allowed");
-        btn.setAttribute("aria-disabled", "true");
-      }
-    });
-  }
+  if (hasPublicPage) {
+    hideTripEditor();
 
-  // Função para habilitar os botões
-  function enableActionButtons() {
-    const buttons = [btnCopy, btnWhats, btnSave, btnGoEdit];
-    buttons.forEach(btn => {
-      if (btn) {
-        btn.disabled = false;
-        btn.classList.remove("opacity-50", "cursor-not-allowed");
-        btn.removeAttribute("aria-disabled");
-      }
-    });
-  }
+    const btnCopy = $("#btnCopyTrip");
+    const btnWhats = $("#btnWhatsapp");
+    const btnSave = $("#btnSaveRows");
+    const btnGoEdit = $("#btnGoEdit");
 
-  // Inicializar botões desabilitados
-  disableActionButtons();
-
-  const qid = getQS("id");
-  const qpin = getQS("pin");
-
-  if (qid && $("#editTripId")) $("#editTripId").value = qid;
-  if (qpin && $("#editPin")) $("#editPin").value = qpin;
-
-  const { tripId, tripPin } = getTripSession();
-
-  // auto carregar apenas na página editar
-  if (tripId && tripPin && $("#editTripId")) {
-    try {
-      await loadTripData(tripId, tripPin);
-      enableActionButtons();
-    } catch {
-      clearTripSession();
-      hideTripEditor();
-    }
-  }
-
-  // Validação visual em Tempo Real
-  document.addEventListener("input", (e) => {
-    if (e.target.classList.contains("row-cpf")) {
-      e.target.value = formatCPF(e.target.value);
-      
-      // Validação visual do CPF
-      const digits = onlyDigits(e.target.value);
-      if (digits.length > 0 && digits.length < 11) {
-        e.target.classList.add("border-red-500");
-      } else if (digits.length === 11) {
-        e.target.classList.remove("border-red-500");
-        e.target.classList.add("border-green-500");
-      } else {
-        e.target.classList.remove("border-red-500", "border-green-500");
-      }
+    function disableActionButtons() {
+      [btnCopy, btnWhats, btnSave, btnGoEdit].forEach((btn) => {
+        if (btn) {
+          btn.disabled = true;
+          btn.classList.add("opacity-50", "cursor-not-allowed");
+          btn.setAttribute("aria-disabled", "true");
+        }
+      });
     }
 
-    if (e.target.classList.contains("row-phone")) {
-      e.target.value = formatPhone(e.target.value);
+    function enableActionButtons() {
+      [btnCopy, btnWhats, btnSave, btnGoEdit].forEach((btn) => {
+        if (btn) {
+          btn.disabled = false;
+          btn.classList.remove("opacity-50", "cursor-not-allowed");
+          btn.removeAttribute("aria-disabled");
+        }
+      });
     }
 
-    if (
-      e.target.classList.contains("row-name") ||
-      e.target.classList.contains("row-cpf") ||
-      e.target.classList.contains("row-phone")
-    ) {
-      updateFilledCount();
-    }
-    
-    // Validação dos campos de criação de viagem
-    if (e.target.id === "destination" || e.target.id === "dateIso" || e.target.id === "responsible") {
-      validateCreateForm();
-    }
-  });
+    window.__enableActionButtons = enableActionButtons;
+    disableActionButtons();
 
-  // Função para validar formulário de criação
-  function validateCreateForm() {
-    const dest = $("#destination")?.value.trim() || "";
-    const date = $("#dateIso")?.value.trim() || "";
-    const resp = $("#responsible")?.value.trim() || "";
-    const btn = $("#btnCreateTrip");
-    
-    const isValid = dest.length >= 3 && date.length > 0 && resp.length >= 3;
-    
-    if (btn) {
-      btn.disabled = !isValid;
-      if (!isValid) {
-        btn.classList.add("opacity-50", "cursor-not-allowed");
-      } else {
-        btn.classList.remove("opacity-50", "cursor-not-allowed");
-      }
-    }
-    
-    return isValid;
-  }
+    const qid = getQS("id");
+    const qpin = getQS("pin");
 
-  // Inicial validação
-  validateCreateForm();
+    if (qid && $("#editTripId")) $("#editTripId").value = qid;
+    if (qpin && $("#editPin")) $("#editPin").value = qpin;
 
-  $("#btnCreateTrip")?.addEventListener("click", createTrip);
-  $("#btnLoadTrip")?.addEventListener("click", loadTripForEdit);
-  $("#btnSaveRows")?.addEventListener("click", savePassengerRows);
-
-  $("#btnCopyTrip")?.addEventListener("click", async () => {
     const { tripId, tripPin } = getTripSession();
-    if (!tripId || !tripPin) {
-      showToast("Nenhuma lista criada/carregada ainda", "warning");
-      return;
+
+    if (tripId && tripPin && $("#editTripId")) {
+      try {
+        await loadTripData(tripId, tripPin);
+        enableActionButtons();
+      } catch {
+        clearTripSession();
+        hideTripEditor();
+      }
     }
 
-    const text = `ID: ${tripId} | PIN: ${tripPin}`;
-
-    try {
-      await navigator.clipboard.writeText(text);
-      showToast("ID + PIN copiados!", "success");
-    } catch {
-      showToast(text, "warning");
-    }
-  });
-
-  $("#btnWhatsapp")?.addEventListener("click", shareTripOnWhatsApp);
-
-  $("#btnGoEdit")?.addEventListener("click", () => {
-    const { tripId } = getTripSession();
-    location.href = tripId ? `editar?id=${encodeURIComponent(tripId)}` : "editar";
-  });
-
-  $("#passengerRows")?.addEventListener("click", (e) => {
-    const btn = e.target.closest(".btn-remove-local-file");
-    if (!btn) return;
-
-    const row = btn.closest("tr");
-    const fileInput = row?.querySelector(".row-file");
-    const currentFilesCell = row?.querySelector(".row-current-files");
-
-    if (fileInput) fileInput.value = "";
-    if (currentFilesCell && !row.dataset.passengerId) {
-      currentFilesCell.textContent = "-";
-    }
-
-    showToast("Anexo local removido da linha", "success");
-  });
-
-  // Função para habilitar botões após criar/carregar viagem
-  window.__enableActionButtons = enableActionButtons;
-});
-}
-
-// ==================== PAINEL ADMIN ====================
-if ($("#tabs") || $("#btnAdminLogin")) {
-  const els = {
-    tabs: $("#tabs"),
-    tbody: $("#tbody"),
-    titulo: $("#viagemTitulo"),
-    info: $("#viagemInfo"),
-    btnEditar: $("#btnEditar"),
-    btnZip: $("#btnZip"),
-    btnExcel: $("#btnExcel"),
-    btnDocx: $("#btnDocx"),
-    btnApagar: $("#btnApagar"),
-    btnLogout: $("#btnLogout"),
-    admError: $("#admError")
-  };
-
-  const state = {
-    trips: [],
-    selectedTripId: null,
-    isLoading: false
-  };
-
-  function renderAdminPassengers(passengers) {
-    if (!els.tbody) return;
-
-    els.tbody.innerHTML = passengers?.length
-      ? passengers
-          .map(
-            (p) => `
-            <tr>
-              <td>${sanitize(p.name)}</td>
-              <td>${sanitize(formatCPF(p.cpf || ""))}</td>
-              <td>${sanitize(formatPhone(p.phone || "-"))}</td>
-            </tr>
-          `
-          )
-          .join("")
-      : `<tr><td colspan="3" class="muted">Nenhum passageiro cadastrado.</td></tr>`;
-  }
-
-  function renderTabs(trips) {
-    state.trips = trips || [];
-    if (!els.tabs) return;
-
-    els.tabs.innerHTML = "";
-
-    if (els.btnEditar) els.btnEditar.disabled = !state.trips.length;
-    if (els.btnZip) els.btnZip.disabled = !state.trips.length;
-    if (els.btnExcel) els.btnExcel.disabled = !state.trips.length;
-    if (els.btnDocx) els.btnDocx.disabled = !state.trips.length;
-    if (els.btnApagar) els.btnApagar.disabled = !state.trips.length;
-
-    if (!state.trips.length) {
-      if (els.titulo) els.titulo.textContent = "Nenhuma viagem cadastrada";
-      renderAdminPassengers([]);
-      return;
-    }
-
-    const frag = document.createDocumentFragment();
-
-    state.trips.forEach((t, index) => {
-      const b = document.createElement("button");
-      b.className = `tab ${index === 0 ? "active" : ""}`;
-      b.textContent = `${t.destination} (${t.id})`;
-      b.dataset.id = t.id;
-      frag.appendChild(b);
-    });
-
-    els.tabs.appendChild(frag);
-    selectTrip(state.trips[0].id);
-  }
-
-  async function selectTrip(tripId) {
-    if (state.isLoading) return;
-
-    state.isLoading = true;
-    state.selectedTripId = tripId;
-
-    try {
-      const trip = state.trips.find((t) => t.id === tripId);
-      if (!trip) return;
-
-      if (els.titulo) els.titulo.textContent = sanitize(trip.destination);
-      if (els.info) {
-        els.info.textContent = `ID: ${trip.id} • PIN: ${trip.pin_plain || "-"} • Saída: ${trip.date_iso} • Resp: ${trip.responsible}`;
+    document.addEventListener("input", (e) => {
+      if (e.target.classList.contains("row-cpf")) {
+        e.target.value = formatCPF(e.target.value);
       }
 
-      const data = await api.post(`/api/admin/trips/${tripId}/passengers`, null, true);
-      renderAdminPassengers(data.passengers || []);
-    } catch (e) {
-      if (els.titulo) els.titulo.textContent = "Erro ao carregar";
-      showToast(e.message, "error");
-    } finally {
-      state.isLoading = false;
+      if (e.target.classList.contains("row-phone")) {
+        e.target.value = formatPhone(e.target.value);
+      }
+
+      if (
+        e.target.classList.contains("row-name") ||
+        e.target.classList.contains("row-cpf") ||
+        e.target.classList.contains("row-phone")
+      ) {
+        updateFilledCount();
+      }
+
+      if (e.target.id === "destination" || e.target.id === "dateIso" || e.target.id === "responsible") {
+        validateCreateForm();
+      }
+    });
+
+    function validateCreateForm() {
+      const dest = $("#destination")?.value.trim() || "";
+      const date = $("#dateIso")?.value.trim() || "";
+      const resp = $("#responsible")?.value.trim() || "";
+      const btn = $("#btnCreateTrip");
+
+      const isValid = dest.length >= 3 && date.length > 0 && resp.length >= 3;
+
+      if (btn) {
+        btn.disabled = !isValid;
+        if (!isValid) {
+          btn.classList.add("opacity-50", "cursor-not-allowed");
+        } else {
+          btn.classList.remove("opacity-50", "cursor-not-allowed");
+        }
+      }
+
+      return isValid;
     }
+
+    validateCreateForm();
+
+    $("#btnCreateTrip")?.addEventListener("click", createTrip);
+    $("#btnLoadTrip")?.addEventListener("click", loadTripForEdit);
+    $("#btnSaveRows")?.addEventListener("click", savePassengerRows);
+
+    $("#btnCopyTrip")?.addEventListener("click", async () => {
+      const { tripId, tripPin } = getTripSession();
+      if (!tripId || !tripPin) {
+        showToast("Nenhuma lista criada/carregada ainda", "warning");
+        return;
+      }
+
+      const text = `ID: ${tripId} | PIN: ${tripPin}`;
+
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast("ID + PIN copiados!", "success");
+      } catch {
+        showToast(text, "warning");
+      }
+    });
+
+    $("#btnWhatsapp")?.addEventListener("click", () => {
+      const { tripId, tripPin } = getTripSession();
+      if (!tripId || !tripPin) {
+        showToast("Crie ou carregue uma lista primeiro", "warning");
+        return;
+      }
+
+      const trip = publicState.currentTrip || {};
+      const text = [
+        "🚌 Excursão Lones Turismo",
+        "",
+        trip.destination ? `Destino: ${trip.destination}` : null,
+        trip.date_iso || trip.dateIso ? `Data: ${trip.date_iso || trip.dateIso}` : null,
+        trip.responsible ? `Responsável: ${trip.responsible}` : null,
+        "",
+        `ID: ${tripId}`,
+        `PIN: ${tripPin}`,
+        "",
+        `Acesse: ${window.location.origin}/editar?id=${encodeURIComponent(tripId)}`
+      ].filter(Boolean).join("\n");
+
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+    });
+
+    $("#btnGoEdit")?.addEventListener("click", (e) => {
+      const { tripId } = getTripSession();
+      e.preventDefault();
+      location.href = tripId ? `/editar?id=${encodeURIComponent(tripId)}` : "/editar";
+    });
+
+    $("#passengerRows")?.addEventListener("click", (e) => {
+      const btn = e.target.closest(".btn-remove-local-file");
+      if (!btn) return;
+
+      const row = btn.closest("tr");
+      const fileInput = row?.querySelector(".row-file");
+      const currentFilesCell = row?.querySelector(".row-current-files");
+
+      if (fileInput) fileInput.value = "";
+      if (currentFilesCell && !row.dataset.passengerId) {
+        currentFilesCell.textContent = "-";
+      }
+
+      showToast("Anexo local removido da linha", "success");
+    });
   }
 
+  // ==================== LOGIN ADMIN ====================
   $("#btnAdminLogin")?.addEventListener("click", async () => {
     const btn = $("#btnAdminLogin");
     const user = $("#admUser")?.value.trim();
     const pass = $("#admPass")?.value.trim();
+    const err = $("#admError");
+
+    if (err) err.textContent = "";
 
     try {
       setLoading(btn, true, "Entrando...");
       const data = await api.post("/api/admin/login", { user, pass });
       localStorage.setItem("adminToken", data.token);
-      location.href = "painel";
+      location.href = "/painel";
     } catch (e) {
-      if (els.admError) els.admError.textContent = e.message;
+      if (err) err.textContent = e.message;
       else showToast(e.message, "error");
     } finally {
       setLoading(btn, false);
     }
   });
 
-  document.addEventListener("DOMContentLoaded", async () => {
-    if ($("#tabs")) {
-      // Verificar autenticação ao carregar o painel
-      const token = localStorage.getItem("adminToken");
-      if (!token) {
-        // Redirecionar para login se não houver token
-        window.location.href = "admin";
+  // ==================== PAINEL ADMIN ====================
+  if ($("#tabs")) {
+    const token = localStorage.getItem("adminToken");
+    if (!token) {
+      location.href = "/admin";
+      return;
+    }
+
+    const painelContent = $("#painelContent");
+    if (painelContent) painelContent.style.display = "block";
+
+    const els = {
+      tabs: $("#tabs"),
+      tbody: $("#tbody"),
+      titulo: $("#viagemTitulo"),
+      info: $("#viagemInfo"),
+      btnEditar: $("#btnEditar"),
+      btnZip: $("#btnZip"),
+      btnExcel: $("#btnExcel"),
+      btnDocx: $("#btnDocx"),
+      btnApagar: $("#btnApagar"),
+      btnLogout: $("#btnLogout")
+    };
+
+    const state = {
+      trips: [],
+      selectedTripId: null,
+      isLoading: false
+    };
+
+    function renderAdminPassengers(passengers) {
+      if (!els.tbody) return;
+
+      els.tbody.innerHTML = passengers?.length
+        ? passengers.map((p) => `
+            <tr>
+              <td>${sanitize(p.name)}</td>
+              <td>${sanitize(formatCPF(p.cpf || ""))}</td>
+              <td>${sanitize(formatPhone(p.phone || "-"))}</td>
+            </tr>
+          `).join("")
+        : `<tr><td colspan="3" class="muted">Nenhum passageiro cadastrado.</td></tr>`;
+    }
+
+    async function selectTrip(tripId) {
+      if (state.isLoading) return;
+
+      state.isLoading = true;
+      state.selectedTripId = tripId;
+
+      try {
+        const trip = state.trips.find((t) => t.id === tripId);
+        if (!trip) return;
+
+        if (els.titulo) els.titulo.textContent = sanitize(trip.destination);
+        if (els.info) {
+          els.info.textContent = `ID: ${trip.id} • PIN: ${trip.pin_plain || "-"} • Saída: ${trip.date_iso} • Resp: ${trip.responsible}`;
+        }
+
+        const data = await api.post(`/api/admin/trips/${tripId}/passengers`, null, true);
+        renderAdminPassengers(data.passengers || []);
+      } catch (e) {
+        if (els.titulo) els.titulo.textContent = "Erro ao carregar";
+        showToast(e.message, "error");
+      } finally {
+        state.isLoading = false;
+      }
+    }
+
+    function renderTabs(trips) {
+      state.trips = trips || [];
+      if (!els.tabs) return;
+
+      els.tabs.innerHTML = "";
+
+      const disabled = !state.trips.length;
+      ["btnEditar", "btnZip", "btnExcel", "btnDocx", "btnApagar"].forEach((id) => {
+        if (els[id]) els[id].disabled = disabled;
+      });
+
+      if (!state.trips.length) {
+        if (els.titulo) els.titulo.textContent = "Nenhuma viagem cadastrada";
+        renderAdminPassengers([]);
         return;
       }
 
-      fetch(`${API}/health`).catch(() => {});
+      const frag = document.createDocumentFragment();
+
+      state.trips.forEach((t, index) => {
+        const b = document.createElement("button");
+        b.className = `tab ${index === 0 ? "active" : ""}`;
+        b.textContent = `${t.destination} (${t.id})`;
+        b.dataset.id = t.id;
+        frag.appendChild(b);
+      });
+
+      els.tabs.appendChild(frag);
+      selectTrip(state.trips[0].id);
+    }
+
+    try {
+      const data = await api.post("/api/admin/trips", null, true);
+      renderTabs(data.trips || []);
+    } catch (e) {
+      if (els.titulo) els.titulo.textContent = "Erro de conexão";
+    }
+
+    els.tabs?.addEventListener("click", (e) => {
+      const btn = e.target.closest(".tab");
+      if (!btn) return;
+
+      $$(".tab").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      selectTrip(btn.dataset.id);
+    });
+
+    els.btnEditar?.addEventListener("click", () => {
+      if (!state.selectedTripId) return;
+
+      const trip = state.trips.find((t) => t.id === state.selectedTripId);
+      if (!trip) return;
+
+      const url = trip.pin_plain
+        ? `/editar?id=${encodeURIComponent(trip.id)}&pin=${encodeURIComponent(trip.pin_plain)}`
+        : `/editar?id=${encodeURIComponent(trip.id)}`;
+
+      location.href = url;
+    });
+
+    els.btnZip?.addEventListener("click", async () => {
+      if (!state.selectedTripId) return;
 
       try {
-        const data = await api.post("/api/admin/trips", null, true);
-        renderTabs(data.trips || []);
+        await downloadWithAuth(`${API}/api/exports/${state.selectedTripId}/zip`);
       } catch (e) {
-        if (els.titulo) els.titulo.textContent = "Erro de conexão";
+        showToast(e.message, "error");
       }
+    });
 
-      els.tabs?.addEventListener("click", (e) => {
-        const btn = e.target.closest(".tab");
-        if (!btn) return;
+    els.btnExcel?.addEventListener("click", async () => {
+      if (!state.selectedTripId) return;
 
-        $$(".tab").forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        selectTrip(btn.dataset.id);
-      });
+      try {
+        await downloadWithAuth(`${API}/api/admin/trips/${state.selectedTripId}/export/xlsx`, `lista-${state.selectedTripId}.xlsx`);
+      } catch (e) {
+        showToast(e.message, "error");
+      }
+    });
 
-      els.btnEditar?.addEventListener("click", () => {
-        if (!state.selectedTripId) return;
+    els.btnDocx?.addEventListener("click", async () => {
+      if (!state.selectedTripId) return;
 
-        const trip = state.trips.find((t) => t.id === state.selectedTripId);
-        if (!trip) return;
+      try {
+        await downloadWithAuth(`${API}/api/admin/trips/${state.selectedTripId}/export/docx`, `lista-${state.selectedTripId}.docx`);
+      } catch (e) {
+        showToast(e.message, "error");
+      }
+    });
 
-        const url = trip.pin_plain
-          ? `editar?id=${encodeURIComponent(trip.id)}&pin=${encodeURIComponent(trip.pin_plain)}`
-          : `editar?id=${encodeURIComponent(trip.id)}`;
+    els.btnApagar?.addEventListener("click", async () => {
+      if (!state.selectedTripId) return;
+      if (!confirm("APAGAR viagem e todos os dados?")) return;
 
-        location.href = url;
-      });
+      try {
+        await api.del(`/api/admin/trips/${state.selectedTripId}/purge`, null, true);
+        showToast("Viagem apagada!", "success");
+        location.reload();
+      } catch (e) {
+        showToast(e.message, "error");
+      }
+    });
 
-      els.btnZip?.addEventListener("click", async () => {
-        if (!state.selectedTripId) return;
-
-        try {
-          await downloadWithAuth(`${API}/api/exports/${state.selectedTripId}/zip`);
-        } catch (e) {
-          showToast(e.message, "error");
-        }
-      });
-
-      els.btnExcel?.addEventListener("click", async () => {
-        if (!state.selectedTripId) return;
-
-        try {
-          await downloadWithAuth(`${API}/api/admin/trips/${state.selectedTripId}/export/xlsx`, `lista-${state.selectedTripId}.xlsx`);
-        } catch (e) {
-          showToast(e.message, "error");
-        }
-      });
-
-      els.btnDocx?.addEventListener("click", async () => {
-        if (!state.selectedTripId) return;
-
-        try {
-          await downloadWithAuth(`${API}/api/admin/trips/${state.selectedTripId}/export/docx`, `lista-${state.selectedTripId}.docx`);
-        } catch (e) {
-          showToast(e.message, "error");
-        }
-      });
-
-      els.btnApagar?.addEventListener("click", async () => {
-        if (!state.selectedTripId) return;
-        if (!confirm("APAGAR viagem e todos os dados?")) return;
-
-        try {
-          await api.del(`/api/admin/trips/${state.selectedTripId}/purge`, null, true);
-          showToast("Viagem apagada!", "success");
-          location.reload();
-        } catch (e) {
-          showToast(e.message, "error");
-        }
-      });
-
-      els.btnLogout?.addEventListener("click", () => {
-        localStorage.removeItem("adminToken");
-        location.href = "admin";
-      });
-    }
-  });
-}
-
-function getAdminToken() {
-  return localStorage.getItem("adminToken");
-}
-
-async function authFetch(url, options = {}) {
-  const token = getAdminToken();
-
-  const headers = {
-    ...(options.headers || {}),
-    Authorization: `Bearer ${token}`,
-  };
-
-  const response = await fetch(url, { ...options, headers });
-
-  if (response.status === 401) {
-    localStorage.removeItem("adminToken");
-    window.location.href = "/admin";
-    return null;
+    els.btnLogout?.addEventListener("click", () => {
+      localStorage.removeItem("adminToken");
+      location.href = "/admin";
+    });
   }
-
-  return response;
-}
+});

@@ -2,7 +2,19 @@
 // Cadastro • Editar • Admin Login • Painel Admin
 // Compatível com a nova tela "Lista" com 70 linhas de passageiros
 
-const API = "https://lonesturismo.onrender.com";
+// API Configuration - Detect environment automatically
+const getApiBaseUrl = () => {
+  // Check if running on localhost or production
+  const isLocalhost = window.location.hostname === 'localhost' || 
+                      window.location.hostname === '127.0.0.1';
+  
+  if (isLocalhost) {
+    return "http://localhost:3001";
+  }
+  return "https://lones-turismo.vercel.app";
+};
+
+const API = getApiBaseUrl();
 const MAX_PASSENGERS = 70;
 
 // ==================== HELPERS COMPARTILHADOS ====================
@@ -60,6 +72,9 @@ function buildTripShareText() {
 
   if (!tripId || !tripPin) return "";
 
+  // Get the current base URL for sharing
+  const baseUrl = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '/');
+
   return [
     "🚌 Excursão Lones Turismo",
     "",
@@ -71,7 +86,7 @@ function buildTripShareText() {
     `PIN: ${tripPin}`,
     "",
     "Acesse:",
-    "https://lones-turismo.vercel.app/"
+    baseUrl
   ].filter(Boolean).join("\n");
 }
 
@@ -362,6 +377,11 @@ async function createTrip() {
     renderPassengerRows([]);
     showTripEditor();
 
+    // Habilitar botões de ação após criar viagem
+    if (window.__enableActionButtons) {
+      window.__enableActionButtons();
+    }
+
     showToast(`Viagem criada! ID: ${data.trip.id} | PIN: ${data.pin}`, "success");
   } catch (e) {
     showToast(e.message, "error");
@@ -396,6 +416,11 @@ async function loadTripData(tripId, pin) {
   setTripInfo(data.trip, pin);
   renderPassengerRows(publicState.currentPassengers);
   showTripEditor();
+
+  // Habilitar botões de ação após carregar viagem
+  if (window.__enableActionButtons) {
+    window.__enableActionButtons();
+  }
 
   if ($("#editArea")) showEl($("#editArea"), "block");
   if ($("#tripHeader") && data.trip?.id) {
@@ -541,6 +566,21 @@ if (
   document.addEventListener("DOMContentLoaded", async () => {
   hideTripEditor();
 
+  // Desabilitar botões de ação até que lista seja criada
+  const btnCopy = $("#btnCopyTrip");
+  const btnWhats = $("#btnWhatsapp");
+  const btnSave = $("#btnSaveRows");
+  
+  if (btnCopy) btnCopy.disabled = true;
+  if (btnWhats) btnWhats.disabled = true;
+  if (btnSave) btnSave.disabled = true;
+
+  function enableActionButtons() {
+    if (btnCopy) btnCopy.disabled = false;
+    if (btnWhats) btnWhats.disabled = false;
+    if (btnSave) btnSave.disabled = false;
+  }
+
   const qid = getQS("id");
   const qpin = getQS("pin");
 
@@ -553,15 +593,28 @@ if (
   if (tripId && tripPin && $("#editTripId")) {
     try {
       await loadTripData(tripId, tripPin);
+      enableActionButtons();
     } catch {
       clearTripSession();
       hideTripEditor();
     }
   }
 
+  // Validação visual em Tempo Real
   document.addEventListener("input", (e) => {
     if (e.target.classList.contains("row-cpf")) {
       e.target.value = formatCPF(e.target.value);
+      
+      // Validação visual do CPF
+      const digits = onlyDigits(e.target.value);
+      if (digits.length > 0 && digits.length < 11) {
+        e.target.classList.add("border-red-500");
+      } else if (digits.length === 11) {
+        e.target.classList.remove("border-red-500");
+        e.target.classList.add("border-green-500");
+      } else {
+        e.target.classList.remove("border-red-500", "border-green-500");
+      }
     }
 
     if (e.target.classList.contains("row-phone")) {
@@ -575,7 +628,36 @@ if (
     ) {
       updateFilledCount();
     }
+    
+    // Validação dos campos de criação de viagem
+    if (e.target.id === "destination" || e.target.id === "dateIso" || e.target.id === "responsible") {
+      validateCreateForm();
+    }
   });
+
+  // Função para validar formulário de criação
+  function validateCreateForm() {
+    const dest = $("#destination")?.value.trim() || "";
+    const date = $("#dateIso")?.value.trim() || "";
+    const resp = $("#responsible")?.value.trim() || "";
+    const btn = $("#btnCreateTrip");
+    
+    const isValid = dest.length >= 3 && date.length > 0 && resp.length >= 3;
+    
+    if (btn) {
+      btn.disabled = !isValid;
+      if (!isValid) {
+        btn.classList.add("opacity-50", "cursor-not-allowed");
+      } else {
+        btn.classList.remove("opacity-50", "cursor-not-allowed");
+      }
+    }
+    
+    return isValid;
+  }
+
+  // Inicial validação
+  validateCreateForm();
 
   $("#btnCreateTrip")?.addEventListener("click", createTrip);
   $("#btnLoadTrip")?.addEventListener("click", loadTripForEdit);
@@ -620,6 +702,9 @@ if (
 
     showToast("Anexo local removido da linha", "success");
   });
+
+  // Função para habilitar botões após criar/carregar viagem
+  window.__enableActionButtons = enableActionButtons;
 });
 }
 
@@ -820,4 +905,101 @@ if ($("#tabs") || $("#btnAdminLogin")) {
       });
     }
   });
+}
+
+function getAdminToken() {
+  return localStorage.getItem("adminToken");
+}
+
+async function authFetch(url, options = {}) {
+  const token = getAdminToken();
+
+  const headers = {
+    ...(options.headers || {}),
+    Authorization: `Bearer ${token}`,
+  };
+
+  const response = await fetch(url, { ...options, headers });
+
+  if (response.status === 401) {
+    localStorage.removeItem("adminToken");
+    window.location.href = "/admin";
+    return null;
+  }
+
+  return response;
+}
+
+const passageirosSection = document.getElementById("passageirosSection");
+
+function esconderPassageirosCadastro() {
+  passageirosSection.hidden = true;
+}
+
+function mostrarPassageirosCadastro() {
+  passageirosSection.hidden = false;
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  esconderPassageirosCadastro();
+});
+
+async function criarLista() {
+  const destino = document.getElementById("destino").value.trim();
+  const data = document.getElementById("data").value;
+  const organizador = document.getElementById("organizador").value.trim();
+
+  const res = await fetch(`${API}/trips`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ destino, data, organizador })
+  });
+
+  const dataRes = await res.json();
+
+  if (!res.ok) {
+    alert(dataRes.error || "Erro ao criar lista");
+    return;
+  }
+
+  setTripSession(dataRes.tripId, dataRes.pin);
+  mostrarPassageirosCadastro();
+  renderLinhasPassageiros();
+}
+
+const editarTripSection = document.getElementById("editarTripSection");
+
+function esconderEdicao() {
+  editarTripSection.hidden = true;
+}
+
+function mostrarEdicao() {
+  editarTripSection.hidden = false;
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  esconderEdicao();
+});
+
+async function carregarViagemPorIdPin() {
+  const tripId = document.getElementById("tripId").value.trim();
+  const pin = document.getElementById("pin").value.trim();
+
+  const res = await fetch(`${API}/trips/${tripId}/access`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pin })
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    esconderEdicao();
+    alert(data.error || "ID ou PIN inválido");
+    return;
+  }
+
+  setTripSession(tripId, pin);
+  mostrarEdicao();
+  renderPassageirosExistentes(data.trip);
 }

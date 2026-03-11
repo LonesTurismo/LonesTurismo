@@ -20,22 +20,20 @@
       "source": "/health",
       "destination": "https://lonesturismo.onrender.com/health"
     },
+
     {
-      "source": "/admin/:path*",
-      "destination": "/frontend/admin.html"
+      "source": "/frontend/css/(.*)",
+      "destination": "/frontend/css/$1"
     },
     {
-      "source": "/painel/:path*",
-      "destination": "/frontend/painel.html"
+      "source": "/frontend/js/(.*)",
+      "destination": "/frontend/js/$1"
     },
     {
-      "source": "/cadastro/:path*",
-      "destination": "/frontend/cadastro.html"
+      "source": "/frontend/img/(.*)",
+      "destination": "/frontend/img/$1"
     },
-    {
-      "source": "/editar/:path*",
-      "destination": "/frontend/editar.html"
-    },
+
     {
       "source": "/admin",
       "destination": "/frontend/admin.html"
@@ -55,10 +53,6 @@
     {
       "source": "/",
       "destination": "/frontend/index.html"
-    },
-    {
-      "source": "/:file",
-      "destination": "/frontend/:file"
     }
   ]
 }

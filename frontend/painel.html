@@ -110,8 +110,7 @@
     </div>
   </section>
 
-<script src="/frontend/js/app.js"></script>
-  <script>
+<script>
     // Protect panel content - hide until authenticated
     (function() {
       const token = localStorage.getItem("adminToken");
@@ -123,5 +122,6 @@
       document.body.style.display = "block";
     })();
   </script>
+  <script src="/frontend/js/app.js"></script>
 </body>
 </html>

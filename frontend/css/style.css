@@ -123,8 +123,8 @@ body {
   top: 0;
   z-index: 1000;
   backdrop-filter: blur(12px);
-  background: rgba(11, 18, 32, 0.55);
-  border-bottom: 1px solid var(--border);
+  background: linear-gradient(90deg,#0f1f38,#1c3f6b);
+  border-bottom: 1px solid rgba(255,255,255,.15);
 }
 
 .header .bar {
@@ -520,9 +520,4 @@ select:-webkit-autofill {
   .logo-link img {
     height: 48px;
   }
-}
-.logo-link img {
-  height: 54px;
-  background: transparent;
-  mix-blend-mode: multiply;
 }

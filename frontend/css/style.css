@@ -521,3 +521,99 @@ select:-webkit-autofill {
     height: 48px;
   }
 }
+/* ===== Tabela da lista de passageiros ===== */
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.list-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 12px;
+  table-layout: fixed;
+}
+
+.list-table thead th {
+  text-align: left;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+  padding: 0 10px 8px;
+  vertical-align: bottom;
+}
+
+.list-table tbody td {
+  padding: 0 10px;
+  vertical-align: middle;
+}
+
+.list-table th:nth-child(1),
+.list-table td:nth-child(1) {
+  width: 40px;
+}
+
+.list-table th:nth-child(2),
+.list-table td:nth-child(2) {
+  width: 220px;
+}
+
+.list-table th:nth-child(3),
+.list-table td:nth-child(3) {
+  width: 220px;
+}
+
+.list-table th:nth-child(4),
+.list-table td:nth-child(4) {
+  width: 220px;
+}
+
+/* Arquivo ocupa o espaço sobrando */
+.list-table th:nth-child(5),
+.list-table td:nth-child(5) {
+  width: auto;
+  min-width: 360px;
+}
+
+/* Anexo atual menor */
+.list-table th:nth-child(6),
+.list-table td:nth-child(6) {
+  width: 140px;
+}
+
+/* Remover anexo exatamente sobre os botões */
+.list-table th:nth-child(7),
+.list-table td:nth-child(7) {
+  width: 140px;
+  text-align: center;
+}
+
+.list-table td input,
+.list-table td select,
+.list-table td textarea {
+  width: 100%;
+  min-width: 0;
+}
+
+.list-table td input[type="file"] {
+  width: 100%;
+  min-width: 0;
+}
+
+.list-table td .btn.danger,
+.list-table td button.btn.danger {
+  width: 100%;
+  justify-content: center;
+}
+
+.list-table td:nth-child(6) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 920px) {
+  .list-table {
+    min-width: 1200px;
+  }
+}

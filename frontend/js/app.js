@@ -7,7 +7,7 @@ const getApiBaseUrl = () => {
     window.location.hostname === "127.0.0.1";
 
   if (isLocalhost) return "http://localhost:3001";
-  return window.location.origin;
+  return "https://lonesturismo.onrender.com"
 };
 
 const API = getApiBaseUrl();

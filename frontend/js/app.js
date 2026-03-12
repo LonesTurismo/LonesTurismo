@@ -7,7 +7,9 @@ const getApiBaseUrl = () => {
     window.location.hostname === "127.0.0.1";
 
   if (isLocalhost) return "http://localhost:3001";
-  return "https://lonesturismo.onrender.com"
+
+  // backend em produção
+  return "https://lonesturismo.onrender.com";
 };
 
 const API = getApiBaseUrl();
@@ -519,13 +521,20 @@ document.addEventListener("DOMContentLoaded", async () => {
     const btnGoEdit = $("#btnGoEdit");
 
     function disableActionButtons() {
-      [btnCopy, btnWhats, btnSave, btnGoEdit].forEach((btn) => {
+      [btnCopy, btnWhats, btnSave].forEach((btn) => {
         if (btn) {
           btn.disabled = true;
           btn.classList.add("opacity-50", "cursor-not-allowed");
           btn.setAttribute("aria-disabled", "true");
         }
       });
+
+      // editar lista sempre liberado
+      if (btnGoEdit) {
+        btnGoEdit.disabled = false;
+        btnGoEdit.classList.remove("opacity-50", "cursor-not-allowed");
+        btnGoEdit.removeAttribute("aria-disabled");
+      }
     }
 
     function enableActionButtons() {
@@ -549,13 +558,19 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const { tripId, tripPin } = getTripSession();
 
-    if (tripId && tripPin && $("#editTripId")) {
+    // corrige restauração da lista tanto no cadastro quanto no editar
+    if (tripId && tripPin) {
       try {
         await loadTripData(tripId, tripPin);
+
+        if ($("#editTripId")) $("#editTripId").value = tripId;
+        if ($("#editPin")) $("#editPin").value = tripPin;
+
         enableActionButtons();
       } catch {
         clearTripSession();
         hideTripEditor();
+        disableActionButtons();
       }
     }
 
@@ -762,71 +777,49 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
     }
 
-    function renderTabs(trips) {
-      state.trips = trips || [];
-      if (!els.tabs) return;
+    async function loadTrips() {
+      try {
+        const data = await api.post("/api/admin/trips", null, true);
+        state.trips = data.trips || [];
 
-      els.tabs.innerHTML = "";
+        if (els.tabs) {
+          els.tabs.innerHTML = state.trips.length
+            ? state.trips.map((trip) => `
+                <button class="btn tab-btn" data-id="${sanitize(trip.id)}">
+                  ${sanitize(trip.destination)} • ${sanitize(trip.date_iso || "")}
+                </button>
+              `).join("")
+            : `<div class="small">Nenhuma viagem cadastrada.</div>`;
+        }
 
-      const disabled = !state.trips.length;
-      ["btnEditar", "btnZip", "btnExcel", "btnDocx", "btnApagar"].forEach((id) => {
-        if (els[id]) els[id].disabled = disabled;
-      });
-
-      if (!state.trips.length) {
-        if (els.titulo) els.titulo.textContent = "Nenhuma viagem cadastrada";
-        renderAdminPassengers([]);
-        return;
+        const firstTrip = state.trips[0];
+        if (firstTrip) {
+          await selectTrip(firstTrip.id);
+        } else {
+          renderAdminPassengers([]);
+        }
+      } catch (e) {
+        showToast(e.message, "error");
       }
-
-      const frag = document.createDocumentFragment();
-
-      state.trips.forEach((t, index) => {
-        const b = document.createElement("button");
-        b.className = `tab ${index === 0 ? "active" : ""}`;
-        b.textContent = `${t.destination} (${t.id})`;
-        b.dataset.id = t.id;
-        frag.appendChild(b);
-      });
-
-      els.tabs.appendChild(frag);
-      selectTrip(state.trips[0].id);
     }
 
-    try {
-      const data = await api.post("/api/admin/trips", null, true);
-      renderTabs(data.trips || []);
-    } catch (e) {
-      if (els.titulo) els.titulo.textContent = "Erro de conexão";
-    }
-
-    els.tabs?.addEventListener("click", (e) => {
-      const btn = e.target.closest(".tab");
+    els.tabs?.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-id]");
       if (!btn) return;
 
-      $$(".tab").forEach((b) => b.classList.remove("active"));
-      btn.classList.add("active");
-      selectTrip(btn.dataset.id);
+      const tripId = btn.dataset.id;
+      await selectTrip(tripId);
     });
 
     els.btnEditar?.addEventListener("click", () => {
       if (!state.selectedTripId) return;
-
-      const trip = state.trips.find((t) => t.id === state.selectedTripId);
-      if (!trip) return;
-
-      const url = trip.pin_plain
-        ? `/editar?id=${encodeURIComponent(trip.id)}&pin=${encodeURIComponent(trip.pin_plain)}`
-        : `/editar?id=${encodeURIComponent(trip.id)}`;
-
-      location.href = url;
+      location.href = `/editar?id=${encodeURIComponent(state.selectedTripId)}`;
     });
 
     els.btnZip?.addEventListener("click", async () => {
       if (!state.selectedTripId) return;
-
       try {
-        await downloadWithAuth(`${API}/api/exports/${state.selectedTripId}/zip`);
+        await downloadWithAuth(`${API}/api/admin/trips/${state.selectedTripId}/zip`);
       } catch (e) {
         showToast(e.message, "error");
       }
@@ -834,9 +827,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     els.btnExcel?.addEventListener("click", async () => {
       if (!state.selectedTripId) return;
-
       try {
-        await downloadWithAuth(`${API}/api/admin/trips/${state.selectedTripId}/export/xlsx`, `lista-${state.selectedTripId}.xlsx`);
+        await downloadWithAuth(`${API}/api/admin/trips/${state.selectedTripId}/excel`, "viagem.xlsx");
       } catch (e) {
         showToast(e.message, "error");
       }
@@ -844,9 +836,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     els.btnDocx?.addEventListener("click", async () => {
       if (!state.selectedTripId) return;
-
       try {
-        await downloadWithAuth(`${API}/api/admin/trips/${state.selectedTripId}/export/docx`, `lista-${state.selectedTripId}.docx`);
+        await downloadWithAuth(`${API}/api/admin/trips/${state.selectedTripId}/docx`, "viagem.docx");
       } catch (e) {
         showToast(e.message, "error");
       }
@@ -854,12 +845,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     els.btnApagar?.addEventListener("click", async () => {
       if (!state.selectedTripId) return;
-      if (!confirm("APAGAR viagem e todos os dados?")) return;
+
+      const confirmed = confirm("Tem certeza que deseja apagar esta viagem?");
+      if (!confirmed) return;
 
       try {
-        await api.del(`/api/admin/trips/${state.selectedTripId}/purge`, null, true);
-        showToast("Viagem apagada!", "success");
-        location.reload();
+        await api.del(`/api/admin/trips/${state.selectedTripId}`, null, true);
+        showToast("Viagem apagada com sucesso!", "success");
+        state.selectedTripId = null;
+        await loadTrips();
       } catch (e) {
         showToast(e.message, "error");
       }
@@ -869,5 +863,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       localStorage.removeItem("adminToken");
       location.href = "/admin";
     });
+
+    await loadTrips();
   }
 });

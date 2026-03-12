@@ -212,13 +212,31 @@ function getTripEditor() {
 function showTripEditor() {
   const cadastroEditor = $("#tripEditor");
   const editArea = $("#editArea");
-  if (cadastroEditor) showEl(cadastroEditor, "block");
-  if (editArea) showEl(editArea, "block");
+
+  if (cadastroEditor) {
+    cadastroEditor.classList.remove("hidden-block");
+    cadastroEditor.style.display = "block";
+  }
+
+  if (editArea) {
+    editArea.classList.remove("hidden-block");
+    editArea.style.display = "block";
+  }
 }
 
 function hideTripEditor() {
-  hideEl($("#tripEditor"));
-  hideEl($("#editArea"));
+  const cadastroEditor = $("#tripEditor");
+  const editArea = $("#editArea");
+
+  if (cadastroEditor) {
+    cadastroEditor.classList.add("hidden-block");
+    cadastroEditor.style.display = "none";
+  }
+
+  if (editArea) {
+    editArea.classList.add("hidden-block");
+    editArea.style.display = "none";
+  }
 }
 
 function resetCadastroPage() {
@@ -550,6 +568,11 @@ async function createTrip() {
     setTripInfo(data.trip, data.pin);
     renderPassengerRows([]);
     showTripEditor();
+
+    const editor = $("#tripEditor");
+    if (editor) {
+      editor.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
 
     if (window.__enableActionButtons) {
       window.__enableActionButtons();

@@ -7,13 +7,13 @@ const getApiBaseUrl = () => {
     window.location.hostname === "127.0.0.1";
 
   if (isLocalhost) return "http://localhost:3001";
-
-  // backend em produção
   return "https://lonesturismo.onrender.com";
 };
 
 const API = getApiBaseUrl();
 const MAX_PASSENGERS = 70;
+const INITIAL_PASSENGERS = 46;
+const PASSENGER_STEP = 5;
 
 // ==================== HELPERS ====================
 const $ = (sel) => document.querySelector(sel);
@@ -35,7 +35,7 @@ const formatPhone = (val) => {
   if (phone.length <= 2) return phone;
   if (phone.length <= 6) return phone.replace(/(\d{2})(\d+)/, "($1) $2");
   if (phone.length <= 10) return phone.replace(/(\d{2})(\d{4})(\d+)/, "($1) $2-$3");
-  return phone.replace(/(\d{2})(\d{5})(\d+)/, "($1) $2-$3");
+  return phone.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
 };
 
 const sanitize = (str) => {
@@ -74,7 +74,7 @@ function setLoading(btn, isLoading, loadingText = "Processando...") {
   if (!btn) return;
 
   if (isLoading) {
-    btn.dataset.originalText = btn.innerHTML;
+    if (!btn.dataset.originalText) btn.dataset.originalText = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = loadingText;
   } else {
@@ -85,19 +85,28 @@ function setLoading(btn, isLoading, loadingText = "Processando...") {
 
 function showToast(message, type = "success") {
   const toast = document.createElement("div");
-  toast.className = `fixed bottom-4 right-4 px-5 py-3 rounded-xl shadow-2xl text-white z-50 ${
-    type === "success"
-      ? "bg-emerald-600"
-      : type === "error"
-      ? "bg-red-600"
-      : "bg-yellow-600"
-  }`;
   toast.textContent = message;
+  toast.style.position = "fixed";
+  toast.style.right = "20px";
+  toast.style.bottom = "20px";
+  toast.style.zIndex = "9999";
+  toast.style.padding = "12px 16px";
+  toast.style.borderRadius = "12px";
+  toast.style.color = "#fff";
+  toast.style.boxShadow = "0 10px 25px rgba(0,0,0,0.18)";
+  toast.style.maxWidth = "320px";
+  toast.style.fontSize = "14px";
+  toast.style.lineHeight = "1.4";
+  toast.style.background =
+    type === "error" ? "#b91c1c" :
+    type === "warning" ? "#b45309" :
+    "#047857";
+
   document.body.appendChild(toast);
 
   setTimeout(() => {
     toast.remove();
-  }, 2500);
+  }, 2600);
 }
 
 // ==================== API ====================
@@ -117,11 +126,12 @@ const api = {
     const res = await fetch(`${API}${ep}`, {
       method,
       headers,
-      body: body
-        ? body instanceof FormData
+      body:
+        body instanceof FormData
           ? body
-          : JSON.stringify(body)
-        : undefined
+          : body
+          ? JSON.stringify(body)
+          : undefined
     });
 
     if (res.status === 401 && admin) {
@@ -150,8 +160,9 @@ const api = {
 
 // ==================== DOWNLOAD ADMIN ====================
 const downloadWithAuth = async (url, fallbackName = "viagem.zip") => {
+  const token = localStorage.getItem("adminToken");
   const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${localStorage.getItem("adminToken")}` }
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
   });
 
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -188,7 +199,9 @@ async function uploadDocs(tripId, passengerId, pin, files) {
 // ==================== ESTADO ====================
 const publicState = {
   currentTrip: null,
-  currentPassengers: []
+  currentPassengers: [],
+  visibleRows: INITIAL_PASSENGERS,
+  autosaveBusy: false
 };
 
 // ==================== TELA PÚBLICA ====================
@@ -208,6 +221,37 @@ function hideTripEditor() {
   hideEl($("#editArea"));
 }
 
+function resetCadastroPage() {
+  clearTripSession();
+  publicState.currentTrip = null;
+  publicState.currentPassengers = [];
+  publicState.visibleRows = INITIAL_PASSENGERS;
+
+  const form = $("#createTripForm");
+  if (form) form.reset();
+
+  const tripInfo = $("#tripInfo");
+  if (tripInfo) {
+    tripInfo.classList.add("empty");
+    tripInfo.innerHTML = "Nenhuma lista criada ainda.";
+  }
+
+  const tripHeader = $("#tripHeader");
+  if (tripHeader) tripHeader.textContent = "Passageiros";
+
+  const tripHint = $("#tripHint");
+  if (tripHint) tripHint.textContent = "";
+
+  const tbody = $("#passengerRows");
+  if (tbody) tbody.innerHTML = "";
+
+  const count = $("#filledCount");
+  if (count) count.textContent = `0 / ${INITIAL_PASSENGERS}`;
+
+  hideTripEditor();
+  updateAddMoreRowsButton();
+}
+
 function updateFilledCount() {
   const rows = $$("#passengerRows tr");
   const filledCount = $("#filledCount");
@@ -216,38 +260,50 @@ function updateFilledCount() {
   let filled = 0;
 
   rows.forEach((row) => {
-    const name = row.querySelector(".row-name")?.value.trim();
+    const name = row.querySelector(".row-name")?.value.trim() || "";
     const cpf = onlyDigits(row.querySelector(".row-cpf")?.value || "");
     const phone = onlyDigits(row.querySelector(".row-phone")?.value || "");
     if (name || cpf || phone) filled++;
   });
 
-  filledCount.textContent = `${filled} / ${MAX_PASSENGERS}`;
+  filledCount.textContent = `${filled} / ${publicState.visibleRows}`;
 }
 
-function renderPassengerRows(existingPassengers = []) {
-  const tbody = $("#passengerRows");
-  if (!tbody) return;
+function updateAddMoreRowsButton() {
+  const btn = $("#btnAddMoreRows");
+  if (!btn) return;
 
-  tbody.innerHTML = "";
+  const reachedLimit = publicState.visibleRows >= MAX_PASSENGERS;
+  btn.disabled = reachedLimit;
 
-  for (let i = 0; i < MAX_PASSENGERS; i++) {
-    const p = existingPassengers[i] || {};
-    const docsCount = Array.isArray(p.documents) ? p.documents.length : 0;
+  if (reachedLimit) {
+    btn.textContent = "Limite máximo atingido";
+    btn.classList.add("opacity-50", "cursor-not-allowed");
+  } else {
+    btn.textContent = "Adicionar +5 passageiros";
+    btn.classList.remove("opacity-50", "cursor-not-allowed");
+  }
+}
 
-    const tr = document.createElement("tr");
-    tr.dataset.index = String(i);
-    tr.dataset.passengerId = p.id || "";
+function getRowsToRender(existingPassengers = []) {
+  const existingCount = Array.isArray(existingPassengers) ? existingPassengers.length : 0;
+  const currentCount = Number(publicState.visibleRows) || INITIAL_PASSENGERS;
+  return Math.min(MAX_PASSENGERS, Math.max(INITIAL_PASSENGERS, currentCount, existingCount));
+}
 
-    tr.innerHTML = `
-      <td>${i + 1}</td>
+function buildPassengerRow(index, passenger = {}) {
+  const docsCount = Array.isArray(passenger.documents) ? passenger.documents.length : 0;
+
+  return `
+    <tr data-index="${index}" data-passenger-id="${sanitize(passenger.id || "")}">
+      <td>${index + 1}</td>
       <td>
         <input
           type="text"
           class="row-name"
           maxlength="100"
           placeholder="Nome completo"
-          value="${sanitize(p.name || "")}"
+          value="${sanitize(passenger.name || "")}"
         >
       </td>
       <td>
@@ -256,7 +312,7 @@ function renderPassengerRows(existingPassengers = []) {
           class="row-cpf"
           maxlength="14"
           placeholder="000.000.000-00"
-          value="${sanitize(p.cpf ? formatCPF(p.cpf) : "")}"
+          value="${sanitize(passenger.cpf ? formatCPF(passenger.cpf) : "")}"
         >
       </td>
       <td>
@@ -265,7 +321,7 @@ function renderPassengerRows(existingPassengers = []) {
           class="row-phone"
           maxlength="15"
           placeholder="(99) 99999-9999"
-          value="${sanitize(p.phone ? formatPhone(p.phone) : "")}"
+          value="${sanitize(passenger.phone ? formatPhone(passenger.phone) : "")}"
         >
       </td>
       <td>
@@ -282,17 +338,49 @@ function renderPassengerRows(existingPassengers = []) {
       <td>
         <button type="button" class="btn danger btn-remove-local-file">Remover</button>
       </td>
-    `;
+    </tr>
+  `;
+}
 
-    tbody.appendChild(tr);
+function renderPassengerRows(existingPassengers = []) {
+  const tbody = $("#passengerRows");
+  if (!tbody) return;
+
+  publicState.visibleRows = getRowsToRender(existingPassengers);
+  tbody.innerHTML = "";
+
+  for (let i = 0; i < publicState.visibleRows; i++) {
+    tbody.insertAdjacentHTML("beforeend", buildPassengerRow(i, existingPassengers[i] || {}));
   }
 
   updateFilledCount();
+  updateAddMoreRowsButton();
+}
+
+function addMorePassengerRows() {
+  const tbody = $("#passengerRows");
+  if (!tbody) return;
+
+  if (publicState.visibleRows >= MAX_PASSENGERS) {
+    updateAddMoreRowsButton();
+    return;
+  }
+
+  const nextTotal = Math.min(MAX_PASSENGERS, publicState.visibleRows + PASSENGER_STEP);
+
+  for (let i = publicState.visibleRows; i < nextTotal; i++) {
+    tbody.insertAdjacentHTML("beforeend", buildPassengerRow(i));
+  }
+
+  publicState.visibleRows = nextTotal;
+  updateFilledCount();
+  updateAddMoreRowsButton();
 }
 
 function setTripInfo(trip, pin = "") {
   const tripInfo = $("#tripInfo");
   if (tripInfo && trip?.id) {
+    tripInfo.classList.remove("empty");
     tripInfo.innerHTML = `
       Viagem criada/carregada: <b>${sanitize(trip.id)}</b>
       ${pin ? ` • PIN: <b>${sanitize(pin)}</b>` : ""}
@@ -317,6 +405,128 @@ function setTripInfo(trip, pin = "") {
   }
 }
 
+function getRowData(row) {
+  return {
+    row,
+    passengerId: row.dataset.passengerId || "",
+    name: row.querySelector(".row-name")?.value.trim() || "",
+    cpf: onlyDigits(row.querySelector(".row-cpf")?.value || ""),
+    phone: onlyDigits(row.querySelector(".row-phone")?.value || ""),
+    files: row.querySelector(".row-file")?.files || []
+  };
+}
+
+function isRowEmpty(rowData) {
+  return !rowData.name && !rowData.cpf && !rowData.phone && !rowData.files?.length;
+}
+
+async function addPassenger(tripId, pin, name, cpf, phone, files) {
+  const data = await api.post(`/api/trips/${tripId}/passengers`, {
+    pin,
+    name,
+    cpf,
+    phone
+  });
+
+  if (files?.length && data?.passengerId) {
+    await uploadDocs(tripId, data.passengerId, pin, files);
+  }
+
+  return data;
+}
+
+async function saveSingleRow(row, options = {}) {
+  const { silent = false, trigger = "manual" } = options;
+  const { tripId, tripPin } = getTripSession();
+
+  if (!tripId || !tripPin) {
+    if (!silent) showToast("Crie ou carregue uma lista primeiro", "error");
+    return false;
+  }
+
+  const rowData = getRowData(row);
+  const currentFilesCell = row.querySelector(".row-current-files");
+  const fileInput = row.querySelector(".row-file");
+
+  if (isRowEmpty(rowData)) {
+    if (rowData.passengerId) {
+      await api.del(`/api/trips/${tripId}/passengers/${rowData.passengerId}`, { pin: tripPin });
+      row.dataset.passengerId = "";
+      if (currentFilesCell) currentFilesCell.textContent = "-";
+      if (!silent) showToast("Linha removida da lista", "success");
+    }
+    updateFilledCount();
+    return true;
+  }
+
+  if (!rowData.name) {
+    if (!silent) showToast("Preencha o nome antes de salvar o CPF", "warning");
+    return false;
+  }
+
+  if (rowData.cpf.length !== 11) {
+    if (!silent) showToast("CPF inválido", "error");
+    return false;
+  }
+
+  if (rowData.passengerId) {
+    await api.put(`/api/trips/${tripId}/passengers/${rowData.passengerId}`, {
+      pin: tripPin,
+      name: rowData.name,
+      cpf: rowData.cpf,
+      phone: rowData.phone
+    });
+
+    if (rowData.files?.length) {
+      await uploadDocs(tripId, rowData.passengerId, tripPin, rowData.files);
+      if (currentFilesCell) currentFilesCell.textContent = `${rowData.files.length} anexo(s) enviado(s)`;
+      if (fileInput) fileInput.value = "";
+    }
+
+    if (!silent) {
+      showToast(
+        trigger === "autosave"
+          ? `Passageiro ${rowData.name} salvo automaticamente`
+          : `Passageiro ${rowData.name} salvo`,
+        "success"
+      );
+    }
+
+    updateFilledCount();
+    return true;
+  }
+
+  const created = await addPassenger(
+    tripId,
+    tripPin,
+    rowData.name,
+    rowData.cpf,
+    rowData.phone,
+    rowData.files
+  );
+
+  if (created?.passengerId) {
+    row.dataset.passengerId = created.passengerId;
+  }
+
+  if (rowData.files?.length) {
+    if (currentFilesCell) currentFilesCell.textContent = `${rowData.files.length} anexo(s) enviado(s)`;
+    if (fileInput) fileInput.value = "";
+  }
+
+  if (!silent) {
+    showToast(
+      trigger === "autosave"
+        ? `Passageiro ${rowData.name} salvo automaticamente`
+        : `Passageiro ${rowData.name} salvo`,
+      "success"
+    );
+  }
+
+  updateFilledCount();
+  return true;
+}
+
 async function createTrip() {
   const btn = $("#btnCreateTrip");
   const destination = $("#destination")?.value.trim();
@@ -335,6 +545,7 @@ async function createTrip() {
     setTripSession(data.trip.id, data.pin);
     publicState.currentTrip = data.trip;
     publicState.currentPassengers = [];
+    publicState.visibleRows = INITIAL_PASSENGERS;
 
     setTripInfo(data.trip, data.pin);
     renderPassengerRows([]);
@@ -359,6 +570,10 @@ async function loadTripData(tripId, pin) {
   setTripSession(tripId, pin);
   publicState.currentTrip = data.trip;
   publicState.currentPassengers = data.passengers || [];
+  publicState.visibleRows = Math.min(
+    MAX_PASSENGERS,
+    Math.max(INITIAL_PASSENGERS, (data.passengers || []).length)
+  );
 
   setTripInfo(data.trip, pin);
   renderPassengerRows(publicState.currentPassengers);
@@ -395,35 +610,6 @@ async function loadTripForEdit() {
   }
 }
 
-function getRowData(row) {
-  return {
-    passengerId: row.dataset.passengerId || "",
-    name: row.querySelector(".row-name")?.value.trim() || "",
-    cpf: onlyDigits(row.querySelector(".row-cpf")?.value || ""),
-    phone: onlyDigits(row.querySelector(".row-phone")?.value || ""),
-    files: row.querySelector(".row-file")?.files || []
-  };
-}
-
-function isRowEmpty(rowData) {
-  return !rowData.name && !rowData.cpf && !rowData.phone && !rowData.files?.length;
-}
-
-async function addPassenger(tripId, pin, name, cpf, phone, files) {
-  const data = await api.post(`/api/trips/${tripId}/passengers`, {
-    pin,
-    name,
-    cpf,
-    phone
-  });
-
-  if (files?.length) {
-    await uploadDocs(tripId, data.passengerId, pin, files);
-  }
-
-  return data;
-}
-
 async function savePassengerRows() {
   const btn = $("#btnSaveRows");
   const { tripId, tripPin } = getTripSession();
@@ -438,61 +624,27 @@ async function savePassengerRows() {
   try {
     setLoading(btn, true, "Salvando...");
 
-    const preparedRows = rows.map((row, index) => {
+    for (let index = 0; index < rows.length; index++) {
+      const row = rows[index];
       const rowData = getRowData(row);
-      const hasExistingPassenger = !!rowData.passengerId;
-      return { row, rowData, hasExistingPassenger, index: index + 1 };
-    });
-
-    for (const item of preparedRows) {
-      const { rowData, index } = item;
-
-      if (isRowEmpty(rowData)) continue;
-
-      if (!rowData.name) {
-        throw new Error(`A linha ${index} precisa ter nome`);
-      }
-
-      if (rowData.cpf.length !== 11) {
-        throw new Error(`CPF inválido na linha ${index} (${rowData.name})`);
-      }
-    }
-
-    for (const item of preparedRows) {
-      const { row, rowData, hasExistingPassenger } = item;
 
       if (isRowEmpty(rowData)) {
-        if (hasExistingPassenger) {
+        if (rowData.passengerId) {
           await api.del(`/api/trips/${tripId}/passengers/${rowData.passengerId}`, { pin: tripPin });
+          row.dataset.passengerId = "";
         }
         continue;
       }
 
-      if (hasExistingPassenger) {
-        await api.put(`/api/trips/${tripId}/passengers/${rowData.passengerId}`, {
-          pin: tripPin,
-          name: rowData.name,
-          cpf: rowData.cpf,
-          phone: rowData.phone
-        });
-
-        if (rowData.files?.length) {
-          await uploadDocs(tripId, rowData.passengerId, tripPin, rowData.files);
-        }
-      } else {
-        const created = await addPassenger(
-          tripId,
-          tripPin,
-          rowData.name,
-          rowData.cpf,
-          rowData.phone,
-          rowData.files
-        );
-
-        if (created?.passengerId) {
-          row.dataset.passengerId = created.passengerId;
-        }
+      if (!rowData.name) {
+        throw new Error(`A linha ${index + 1} precisa ter nome`);
       }
+
+      if (rowData.cpf.length !== 11) {
+        throw new Error(`CPF inválido na linha ${index + 1}`);
+      }
+
+      await saveSingleRow(row, { silent: true, trigger: "manual" });
     }
 
     await loadTripData(tripId, tripPin);
@@ -529,7 +681,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
       });
 
-      // editar lista sempre liberado
       if (btnGoEdit) {
         btnGoEdit.disabled = false;
         btnGoEdit.classList.remove("opacity-50", "cursor-not-allowed");
@@ -550,27 +701,36 @@ document.addEventListener("DOMContentLoaded", async () => {
     window.__enableActionButtons = enableActionButtons;
     disableActionButtons();
 
+    const isCadastroPage = !!$("#btnCreateTrip") && !$("#btnLoadTrip");
+    const isEditPage = !!$("#btnLoadTrip");
+
     const qid = getQS("id");
     const qpin = getQS("pin");
 
     if (qid && $("#editTripId")) $("#editTripId").value = qid;
     if (qpin && $("#editPin")) $("#editPin").value = qpin;
 
-    const { tripId, tripPin } = getTripSession();
+    if (isCadastroPage) {
+      resetCadastroPage();
+      disableActionButtons();
+    }
 
-    // corrige restauração da lista tanto no cadastro quanto no editar
-    if (tripId && tripPin) {
-      try {
-        await loadTripData(tripId, tripPin);
+    if (isEditPage) {
+      const { tripId, tripPin } = getTripSession();
 
-        if ($("#editTripId")) $("#editTripId").value = tripId;
-        if ($("#editPin")) $("#editPin").value = tripPin;
+      if (tripId && tripPin) {
+        try {
+          await loadTripData(tripId, tripPin);
 
-        enableActionButtons();
-      } catch {
-        clearTripSession();
-        hideTripEditor();
-        disableActionButtons();
+          if ($("#editTripId")) $("#editTripId").value = tripId;
+          if ($("#editPin")) $("#editPin").value = tripPin;
+
+          enableActionButtons();
+        } catch {
+          clearTripSession();
+          hideTripEditor();
+          disableActionButtons();
+        }
       }
     }
 
@@ -591,8 +751,71 @@ document.addEventListener("DOMContentLoaded", async () => {
         updateFilledCount();
       }
 
-      if (e.target.id === "destination" || e.target.id === "dateIso" || e.target.id === "responsible") {
+      if (
+        e.target.id === "destination" ||
+        e.target.id === "dateIso" ||
+        e.target.id === "responsible"
+      ) {
         validateCreateForm();
+      }
+    });
+
+    document.addEventListener("blur", async (e) => {
+      if (!e.target.classList.contains("row-cpf")) return;
+
+      const row = e.target.closest("tr");
+      if (!row) return;
+
+      const rowData = getRowData(row);
+
+      if (!rowData.cpf) {
+        updateFilledCount();
+        return;
+      }
+
+      if (!rowData.name) {
+        showToast("Preencha o nome antes do CPF para salvar automaticamente", "warning");
+        return;
+      }
+
+      if (rowData.cpf.length !== 11) {
+        showToast("CPF inválido para salvar automaticamente", "error");
+        return;
+      }
+
+      if (publicState.autosaveBusy) return;
+
+      try {
+        publicState.autosaveBusy = true;
+        await saveSingleRow(row, { silent: false, trigger: "autosave" });
+      } catch (e2) {
+        showToast(e2.message, "error");
+      } finally {
+        publicState.autosaveBusy = false;
+      }
+    }, true);
+
+    document.addEventListener("keydown", async (e) => {
+      if (!e.target.classList.contains("row-cpf")) return;
+      if (e.key !== "Enter") return;
+
+      e.preventDefault();
+
+      const row = e.target.closest("tr");
+      if (!row) return;
+
+      const rowData = getRowData(row);
+
+      if (!rowData.cpf || !rowData.name || rowData.cpf.length !== 11) return;
+      if (publicState.autosaveBusy) return;
+
+      try {
+        publicState.autosaveBusy = true;
+        await saveSingleRow(row, { silent: false, trigger: "autosave" });
+      } catch (e2) {
+        showToast(e2.message, "error");
+      } finally {
+        publicState.autosaveBusy = false;
       }
     });
 
@@ -621,6 +844,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     $("#btnCreateTrip")?.addEventListener("click", createTrip);
     $("#btnLoadTrip")?.addEventListener("click", loadTripForEdit);
     $("#btnSaveRows")?.addEventListener("click", savePassengerRows);
+    $("#btnAddMoreRows")?.addEventListener("click", addMorePassengerRows);
 
     $("#btnCopyTrip")?.addEventListener("click", async () => {
       const { tripId, tripPin } = getTripSession();
@@ -664,8 +888,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
     $("#btnGoEdit")?.addEventListener("click", (e) => {
-      const { tripId } = getTripSession();
       e.preventDefault();
+      const { tripId } = getTripSession();
       location.href = tripId ? `/editar?id=${encodeURIComponent(tripId)}` : "/editar";
     });
 
@@ -678,7 +902,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const currentFilesCell = row?.querySelector(".row-current-files");
 
       if (fileInput) fileInput.value = "";
-      if (currentFilesCell && !row.dataset.passengerId) {
+      if (currentFilesCell && !row?.dataset.passengerId) {
         currentFilesCell.textContent = "-";
       }
 

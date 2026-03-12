@@ -73,7 +73,7 @@
       </div>
     </section>
 
-    <section id="tripEditor" class="card glass hidden-block">
+    <section id="tripEditor" class="card glass hidden-block" style="display:none;">
       <div class="list-head">
         <div>
           <h2 id="tripHeader" class="list-title">Passageiros</h2>
@@ -82,7 +82,7 @@
 
         <div class="counter-card">
           <span>Passageiros preenchidos</span>
-          <strong id="filledCount">0 / 65 </strong>
+          <strong id="filledCount">0 / 46</strong>
         </div>
       </div>
 
@@ -99,12 +99,12 @@
               <th>Remover anexo</th>
             </tr>
           </thead>
-          <tbody id="passengerRows">
-          </tbody>
+          <tbody id="passengerRows"></tbody>
         </table>
       </div>
 
       <div class="row footer-actions">
+        <button class="btn" id="btnAddMoreRows" type="button">Adicionar +5 passageiros</button>
         <button class="btn primary" id="btnSaveRows" type="button">Salvar Lista</button>
       </div>
     </section>

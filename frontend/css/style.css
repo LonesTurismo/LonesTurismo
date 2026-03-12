@@ -38,12 +38,12 @@ body {
 }
 
 .container {
-  width: min(1120px, 88%);
+  width: min(12500px, 98%);
   margin: 0 auto;
 }
 
 .container.wide {
-  width: min(1150px, 88%);
+  width: min(1280px, 98%);
   margin: 0 auto;
 }
 

@@ -521,3 +521,8 @@ select:-webkit-autofill {
     height: 48px;
   }
 }
+.logo-link img {
+  height: 54px;
+  background: transparent;
+  mix-blend-mode: multiply;
+}

@@ -1,36 +1,30 @@
 {
   "cleanUrls": true,
   "trailingSlash": false,
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
-      ]
-    }
-  ],
+
   "rewrites": [
     {
       "source": "/api/(.*)",
       "destination": "https://lonesturismo.onrender.com/api/$1"
     },
+
     {
       "source": "/health",
       "destination": "https://lonesturismo.onrender.com/health"
     },
 
     {
-      "source": "/frontend/css/(.*)",
+      "source": "/css/(.*)",
       "destination": "/frontend/css/$1"
     },
+
     {
-      "source": "/frontend/js/(.*)",
+      "source": "/js/(.*)",
       "destination": "/frontend/js/$1"
     },
+
     {
-      "source": "/frontend/img/(.*)",
+      "source": "/img/(.*)",
       "destination": "/frontend/img/$1"
     },
 
@@ -38,18 +32,22 @@
       "source": "/admin",
       "destination": "/frontend/admin.html"
     },
-    {
-      "source": "/painel",
-      "destination": "/frontend/painel.html"
-    },
+
     {
       "source": "/cadastro",
       "destination": "/frontend/cadastro.html"
     },
+
     {
       "source": "/editar",
       "destination": "/frontend/editar.html"
     },
+
+    {
+      "source": "/painel",
+      "destination": "/frontend/painel.html"
+    },
+
     {
       "source": "/",
       "destination": "/frontend/index.html"

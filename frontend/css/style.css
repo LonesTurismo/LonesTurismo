@@ -12,7 +12,6 @@
   --danger: #b91c1c;
   --shadow: 0 18px 60px rgba(0, 0, 0, 0.35);
   --radius: 18px;
-  --whatsapp: #25d366;
 }
 
 * {
@@ -29,26 +28,8 @@ body {
   background:
     radial-gradient(900px 500px at 15% 10%, rgba(0, 150, 255, 0.18), transparent 60%),
     radial-gradient(800px 500px at 85% 15%, rgba(0, 255, 180, 0.12), transparent 55%),
-    radial-gradient(700px 420px at 50% 100%, rgba(37, 99, 235, 0.10), transparent 60%),
     var(--bg);
   color: var(--text);
-  position: relative;
-}
-
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.015), transparent 18%),
-    radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.03), transparent 35%);
-  z-index: -1;
-}
-
-img {
-  max-width: 100%;
-  display: block;
 }
 
 /* Layout base */
@@ -100,10 +81,6 @@ img {
   margin-top: 10px;
 }
 
-a {
-  text-decoration: none;
-}
-
 /* Topbar */
 .topbar {
   background: rgba(11, 18, 32, 0.72);
@@ -153,16 +130,11 @@ a {
   font-weight: 800;
   padding: 8px 10px;
   border-radius: 8px;
-  transition: background 0.2s ease, transform 0.2s ease;
 }
 
 .menu a.active,
 .menu a:hover {
   background: var(--surface2);
-}
-
-.menu a:hover {
-  transform: translateY(-1px);
 }
 
 /* Header novo */
@@ -194,7 +166,6 @@ a {
   font-weight: 600;
   padding: 10px 12px;
   border-radius: 12px;
-  transition: background 0.2s ease, color 0.2s ease;
 }
 
 .nav a:hover {
@@ -216,7 +187,6 @@ a {
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.22);
   padding: 18px;
   margin-bottom: 16px;
-  backdrop-filter: blur(10px);
 }
 
 .pass-card {
@@ -338,7 +308,7 @@ select:-webkit-autofill {
   cursor: pointer;
   text-decoration: none;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-  transition: transform 0.2s ease, opacity 0.2s ease, background 0.2s ease;
+  transition: transform 0.2s ease;
 }
 
 .btn:hover {
@@ -400,21 +370,17 @@ select:-webkit-autofill {
 
 .hero-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 1.1fr 0.9fr;
   gap: 26px;
   align-items: stretch;
 }
 
 .hero-card {
   border: 1px solid var(--border);
-  border-radius: 26px;
+  border-radius: var(--radius);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
   box-shadow: var(--shadow);
-  padding: 34px 28px;
-  text-align: center;
-  max-width: 920px;
-  margin: 0 auto;
-  backdrop-filter: blur(12px);
+  padding: 28px;
 }
 
 .kicker {
@@ -439,19 +405,25 @@ select:-webkit-autofill {
   color: var(--muted);
   font-size: 16px;
   line-height: 1.6;
-  margin: 0 auto 18px;
-  max-width: 720px;
+  margin: 0 0 18px;
 }
 
 .hero-actions {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
-  justify-content: center;
 }
 
 .hero-media {
-  display: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.35)),
+    url("/img/hero.jpg") center/cover no-repeat;
+  box-shadow: var(--shadow);
+  min-height: 320px;
+  position: relative;
+  overflow: hidden;
 }
 
 .hero-badges {
@@ -536,19 +508,18 @@ select:-webkit-autofill {
   text-align: center;
   font-size: clamp(16px, 2vw, 22px);
   margin-bottom: 34px !important;
-  color: var(--muted);
 }
 
 .travel-cards {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 22px;
+  gap: 24px;
 }
 
 .travel-card {
   position: relative;
-  min-height: 500px;
-  border-radius: 24px;
+  min-height: 640px;
+  border-radius: 28px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.16);
   box-shadow: 0 22px 60px rgba(0, 0, 0, 0.38);
@@ -589,14 +560,14 @@ select:-webkit-autofill {
 
 .travel-card-price {
   position: absolute;
-  top: 18px;
-  right: 18px;
+  top: 22px;
+  right: 22px;
   z-index: 3;
   background: rgba(18, 24, 38, 0.82);
   color: #fff;
-  padding: 12px 22px;
-  border-radius: 18px;
-  font-size: clamp(22px, 2vw, 30px);
+  padding: 16px 28px;
+  border-radius: 22px;
+  font-size: clamp(28px, 2.3vw, 38px);
   font-weight: 900;
   line-height: 1;
   backdrop-filter: blur(8px);
@@ -607,13 +578,13 @@ select:-webkit-autofill {
   position: relative;
   z-index: 3;
   width: 100%;
-  padding: 0 24px 24px;
+  padding: 0 28px 28px;
 }
 
 .travel-card-content h3 {
-  margin: 0 0 12px;
+  margin: 0 0 14px;
   color: #fff;
-  font-size: clamp(22px, 1.8vw, 32px);
+  font-size: clamp(26px, 2vw, 40px);
   line-height: 1.12;
   font-weight: 900;
   letter-spacing: -0.5px;
@@ -621,10 +592,10 @@ select:-webkit-autofill {
 }
 
 .travel-card-content p {
-  margin: 0 0 22px;
+  margin: 0 0 24px;
   color: rgba(255, 255, 255, 0.92);
-  font-size: clamp(14px, 1vw, 17px);
-  line-height: 1.5;
+  font-size: clamp(16px, 1.1vw, 20px);
+  line-height: 1.48;
   max-width: 95%;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
 }
@@ -633,14 +604,14 @@ select:-webkit-autofill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 158px;
-  min-height: 54px;
-  padding: 0 24px;
+  min-width: 170px;
+  min-height: 62px;
+  padding: 0 28px;
   border-radius: 999px;
   background: linear-gradient(135deg, #2563eb, #3b82f6);
   color: #fff;
   text-decoration: none;
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 800;
   box-shadow: 0 12px 28px rgba(37, 99, 235, 0.42);
   transition: transform 0.18s ease, box-shadow 0.18s ease;
@@ -651,207 +622,12 @@ select:-webkit-autofill {
   box-shadow: 0 16px 34px rgba(37, 99, 235, 0.5);
 }
 
-/* ===== FROTA MAIS ATRATIVA ===== */
-.fleet-section {
-  padding: 52px 0;
-}
-
-.fleet-header {
-  text-align: center;
-  max-width: 840px;
-  margin: 0 auto 26px;
-}
-
-.fleet-title {
-  font-size: clamp(28px, 3vw, 46px);
-  line-height: 1.06;
-  margin-bottom: 10px;
-  font-weight: 900;
-}
-
-.fleet-sub {
-  color: var(--muted);
-  font-size: clamp(15px, 1.2vw, 18px);
-  line-height: 1.6;
-}
-
-.fleet-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 24px;
-}
-
-.fleet-card {
-  border: 1px solid var(--border);
-  border-radius: 24px;
-  overflow: hidden;
-  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(10px);
-}
-
-.fleet-media {
-  height: 250px;
-  overflow: hidden;
-}
-
-.fleet-media img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.fleet-body {
-  padding: 22px;
-}
-
-.fleet-body h3 {
-  margin: 0 0 12px;
-  font-size: 24px;
-  font-weight: 900;
-  color: var(--text);
-}
-
-.fleet-text {
-  margin: 0 0 16px;
-  color: var(--muted);
-  line-height: 1.65;
-}
-
-.fleet-features {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  gap: 10px;
-}
-
-.fleet-features li {
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,255,255,0.08);
-  color: var(--text);
-}
-
-/* ===== CONTATO DESTACADO ===== */
-.contact-section {
-  padding: 52px 0 26px;
-}
-
-.contact-box {
-  border: 1px solid rgba(255,255,255,0.16);
-  border-radius: 26px;
-  padding: 30px 28px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 20px;
-  background:
-    linear-gradient(135deg, rgba(13, 59, 120, 0.92), rgba(29, 78, 216, 0.75)),
-    rgba(255,255,255,0.06);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(12px);
-}
-
-.contact-text h2 {
-  margin: 0 0 10px;
-  font-size: clamp(26px, 2.5vw, 38px);
-  line-height: 1.08;
-}
-
-.contact-text p {
-  margin: 0;
-  color: rgba(234, 240, 255, 0.86);
-  line-height: 1.6;
-}
-
-.contact-actions {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.contact-actions .btn {
-  min-height: 48px;
-}
-
-.contact-actions .btn.secondary {
-  background: rgba(255,255,255,0.12);
-  color: #fff;
-}
-
-/* Footer antigo */
+/* Footer */
 .footer {
   border-top: 1px solid var(--border);
   background: rgba(0, 0, 0, 0.2);
   padding: 26px 0;
   color: var(--muted);
-}
-
-/* ===== RODAPÉ MAIS COMPLETO ===== */
-.site-footer {
-  margin-top: 56px;
-  border-top: 1px solid var(--border);
-  background:
-    linear-gradient(180deg, rgba(4, 10, 22, 0.94), rgba(2, 6, 16, 0.98));
-  color: var(--muted);
-}
-
-.footer-grid {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr 1.1fr;
-  gap: 28px;
-  padding: 42px 0 30px;
-}
-
-.footer-col h3,
-.footer-col h4 {
-  margin: 0 0 14px;
-  color: var(--text);
-}
-
-.footer-col p,
-.footer-col li,
-.footer-col a {
-  color: var(--muted);
-  line-height: 1.8;
-  font-size: 0.96rem;
-}
-
-.footer-col ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.footer-col a:hover {
-  color: #ffffff;
-}
-
-.footer-whatsapp {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 10px;
-  padding: 12px 16px;
-  border-radius: 12px;
-  background: var(--whatsapp);
-  color: #fff !important;
-  font-weight: 800;
-  box-shadow: 0 12px 28px rgba(37, 211, 102, 0.2);
-}
-
-.footer-bottom {
-  border-top: 1px solid var(--border);
-  padding: 16px 0;
-  text-align: center;
-}
-
-.footer-bottom p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.93rem;
 }
 
 /* ===== Tabela da lista de passageiros ===== */
@@ -975,8 +751,8 @@ select:-webkit-autofill {
     grid-template-columns: 1fr 1fr;
   }
 
-  .fleet-grid {
-    grid-template-columns: 1fr;
+  .travel-card {
+    min-height: 560px;
   }
 }
 
@@ -1018,16 +794,16 @@ select:-webkit-autofill {
   }
 
   .travel-card {
-    min-height: 460px;
-    border-radius: 22px;
+    min-height: 500px;
+    border-radius: 24px;
   }
 
   .travel-card-price {
     top: 16px;
     right: 16px;
     padding: 12px 18px;
-    font-size: 24px;
-    border-radius: 16px;
+    font-size: 28px;
+    border-radius: 18px;
   }
 
   .travel-card-content {
@@ -1044,19 +820,10 @@ select:-webkit-autofill {
   }
 
   .travel-card-btn {
-    min-height: 52px;
-    min-width: 148px;
+    min-height: 54px;
+    min-width: 150px;
     font-size: 16px;
     padding: 0 22px;
-  }
-
-  .contact-box {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .footer-grid {
-    grid-template-columns: repeat(2, 1fr);
   }
 
   .list-table {
@@ -1074,7 +841,7 @@ select:-webkit-autofill {
   }
 
   .travel-card {
-    min-height: 400px;
+    min-height: 430px;
   }
 
   .travel-card-content h3 {
@@ -1087,26 +854,6 @@ select:-webkit-autofill {
   }
 
   .travel-card-price {
-    font-size: 20px;
-  }
-
-  .hero-card {
-    padding: 24px 18px;
-  }
-
-  .fleet-body h3 {
-    font-size: 21px;
-  }
-
-  .footer-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .contact-actions {
-    width: 100%;
-  }
-
-  .contact-actions .btn {
-    width: 100%;
+    font-size: 22px;
   }
 }

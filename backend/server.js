@@ -326,24 +326,8 @@ async function getPassengersWithDocuments(tripId) {
   return passengers;
 }
 
-async function removePassengerDocumentsFromCloudinary(passengerId) {
-  const docs = await many(
-    `SELECT id, public_id FROM documents WHERE passenger_id = $1`,
-    [passengerId]
-  );
-
-  for (const d of docs) {
-    if (!d.public_id) continue;
-    try {
-      await cloudinary.uploader.destroy(d.public_id, { resource_type: "auto" });
-    } catch (err) {
-      console.error("Erro ao remover arquivo do Cloudinary:", err);
-    }
-  }
-}
-
 // ===================
-// DATABASE INITIALIZATION
+// DATABASE INIT
 // ===================
 async function initDb() {
   await q(`
@@ -353,21 +337,10 @@ async function initDb() {
       date_iso TEXT NOT NULL,
       responsible TEXT NOT NULL,
       pin_hash TEXT NOT NULL,
-      pin_plain TEXT,
-      visible_rows INTEGER NOT NULL DEFAULT 46,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      pin_plain TEXT NOT NULL,
+      visible_rows INTEGER NOT NULL DEFAULT ${INITIAL_PASSENGERS},
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
-  `);
-
-  await q(`
-    ALTER TABLE trips
-    ADD COLUMN IF NOT EXISTS visible_rows INTEGER NOT NULL DEFAULT 46;
-  `);
-
-  await q(`
-    UPDATE trips
-    SET visible_rows = 46
-    WHERE visible_rows IS NULL;
   `);
 
   await q(`
@@ -377,8 +350,7 @@ async function initDb() {
       name TEXT NOT NULL,
       cpf TEXT NOT NULL,
       phone TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      UNIQUE (trip_id, cpf)
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
   `);
 
@@ -388,322 +360,198 @@ async function initDb() {
       passenger_id TEXT NOT NULL REFERENCES passengers(id) ON DELETE CASCADE,
       filename TEXT NOT NULL,
       url TEXT NOT NULL,
-      public_id TEXT,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-
-  await q(`
-    CREATE TABLE IF NOT EXISTS backups (
-      id TEXT PRIMARY KEY,
-      trigger_type TEXT NOT NULL,
-      backup_url TEXT,
-      public_id TEXT,
-      snapshot JSONB NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      public_id TEXT NOT NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
   `);
 
   await q(`CREATE INDEX IF NOT EXISTS idx_passengers_trip_id ON passengers(trip_id);`);
   await q(`CREATE INDEX IF NOT EXISTS idx_documents_passenger_id ON documents(passenger_id);`);
-  await q(`CREATE INDEX IF NOT EXISTS idx_backups_created_at ON backups(created_at DESC);`);
+  await q(`CREATE UNIQUE INDEX IF NOT EXISTS idx_passengers_trip_cpf ON passengers(trip_id, cpf);`);
 }
 
 // ===================
-// BACKUP SYSTEM
+// HEALTH
 // ===================
-async function buildBackupSnapshot() {
-  const trips = await many(
-    `SELECT id, destination, date_iso, responsible, pin_plain, visible_rows, created_at
-     FROM trips
-     ORDER BY created_at DESC`
-  );
-
-  const passengers = await many(
-    `SELECT id, trip_id, name, cpf, phone, created_at
-     FROM passengers
-     ORDER BY created_at ASC`
-  );
-
-  const documents = await many(
-    `SELECT id, passenger_id, filename, url, public_id, created_at
-     FROM documents
-     ORDER BY created_at ASC`
-  );
-
-  return {
-    generated_at: nowIso(),
-    totals: {
-      trips: trips.length,
-      passengers: passengers.length,
-      documents: documents.length,
-    },
-    trips,
-    passengers,
-    documents,
-  };
-}
-
-function uploadBackupJson(snapshot, backupId) {
-  return new Promise((resolve, reject) => {
-    const payload = JSON.stringify(snapshot, null, 2);
-    const stream = cloudinary.uploader.upload_stream(
-      {
-        folder: "lonestur/backups",
-        resource_type: "raw",
-        public_id: `backup-${backupId}`,
-        overwrite: true,
-        format: "json",
-      },
-      (error, result) => {
-        if (error) return reject(error);
-        resolve(result);
-      }
-    );
-
-    const pass = new PassThrough();
-    pass.end(Buffer.from(payload));
-    pass.pipe(stream);
-  });
-}
-
-async function createBackup(triggerType = "manual") {
-  const backupId = id12();
-  const snapshot = await buildBackupSnapshot();
-
-  let backupUrl = null;
-  let publicId = null;
-
-  try {
-    const uploaded = await uploadBackupJson(snapshot, backupId);
-    backupUrl = uploaded?.secure_url || null;
-    publicId = uploaded?.public_id || null;
-  } catch (err) {
-    console.error("Falha ao enviar backup para Cloudinary:", err);
-  }
-
-  await q(
-    `INSERT INTO backups (id, trigger_type, backup_url, public_id, snapshot, created_at)
-     VALUES ($1, $2, $3, $4, $5::jsonb, $6)`,
-    [backupId, triggerType, backupUrl, publicId, JSON.stringify(snapshot), nowIso()]
-  );
-
-  return { id: backupId, trigger_type: triggerType, backup_url: backupUrl, created_at: nowIso() };
-}
-
-let backupTimer = null;
-let pendingTrigger = "auto";
-
-function scheduleBackup(triggerType = "auto") {
-  pendingTrigger = triggerType;
-  if (backupTimer) clearTimeout(backupTimer);
-  backupTimer = setTimeout(async () => {
-    backupTimer = null;
-    try {
-      await createBackup(pendingTrigger);
-      console.log(`Backup automático criado: ${pendingTrigger}`);
-    } catch (err) {
-      console.error("Erro ao criar backup automático:", err);
-    }
-  }, 8000);
-}
+app.get("/health", (_req, res) => {
+  res.json({ ok: true, time: nowIso() });
+});
 
 // ===================
-// ROUTES - PUBLIC
-// ===================
-app.get("/health", asyncHandler(async (req, res) => {
-  await q("SELECT 1");
-  const lastBackup = await one(`SELECT id, created_at FROM backups ORDER BY created_at DESC LIMIT 1`);
-  res.json({ ok: true, db: "postgres", lastBackupAt: lastBackup?.created_at || null });
-}));
-
-app.post("/trip/access", tripAccessLimiter, asyncHandler(async (req, res) => {
-  const data = z.object({
-    tripId: z.string().trim().min(1, "ID da viagem é obrigatório"),
-    pin: z.string().trim().min(4, "PIN inválido"),
-  }).parse(req.body);
-
-  await verifyTripPinOrThrow(data.tripId, data.pin);
-
-  const trip = await one(
-    `SELECT id, destination, date_iso, responsible, pin_plain, visible_rows, created_at
-     FROM trips
-     WHERE id = $1`,
-    [data.tripId]
-  );
-
-  const passengers = await getPassengersWithDocuments(data.tripId);
-  res.json({ ok: true, trip, passengers });
-}));
-
-// ===================
-// ROUTES - ADMIN
-// ===================
-app.post("/api/admin/login", asyncHandler(async (req, res) => {
-  const data = adminLoginSchema.parse(req.body);
-
-  if (
-    data.user !== process.env.ADMIN_USER ||
-    data.pass !== process.env.ADMIN_PASS
-  ) {
-    return res.status(401).json({ error: "Usuário ou senha incorretos" });
-  }
-
-  const token = jwt.sign(
-    { user: data.user, role: "admin" },
-    JWT_SECRET,
-    { expiresIn: "8h" }
-  );
-
-  res.json({ success: true, token });
-}));
-
-app.post("/admin/login", asyncHandler(async (req, res) => {
-  const data = adminLoginSchema.parse(req.body);
-
-  if (
-    data.user !== process.env.ADMIN_USER ||
-    data.pass !== process.env.ADMIN_PASS
-  ) {
-    return res.status(401).json({ error: "Usuário ou senha incorretos" });
-  }
-
-  const token = jwt.sign(
-    { user: data.user, role: "admin" },
-    JWT_SECRET,
-    { expiresIn: "12h" }
-  );
-
-  res.json({ success: true, token });
-}));
-
-// ===================
-// ROUTES - TRIPS
+// PUBLIC ROUTES
 // ===================
 app.post("/api/trips", asyncHandler(async (req, res) => {
-  const data = createTripSchema.parse(req.body);
+  const parsed = createTripSchema.safeParse(req.body);
 
-  const tripId = id8();
-  const pin = pin4();
-  const pinHash = await bcrypt.hash(pin, 10);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message || "Dados inválidos" });
+  }
+
+  const { destination, dateIso, responsible } = parsed.data;
+
+  let tripId;
+  let pinPlain;
+  let pinHash;
+
+  for (let i = 0; i < 10; i += 1) {
+    tripId = id8();
+    pinPlain = pin4();
+
+    const exists = await one(`SELECT id FROM trips WHERE id = $1`, [tripId]);
+    if (!exists) {
+      pinHash = await bcrypt.hash(pinPlain, 10);
+      break;
+    }
+  }
+
+  if (!tripId || !pinPlain || !pinHash) {
+    return res.status(500).json({ error: "Não foi possível gerar ID/PIN da viagem" });
+  }
 
   await q(
-    `INSERT INTO trips (id, destination, date_iso, responsible, pin_hash, pin_plain, visible_rows, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-    [tripId, data.destination, data.dateIso, data.responsible, pinHash, pin, INITIAL_PASSENGERS, nowIso()]
+    `INSERT INTO trips (id, destination, date_iso, responsible, pin_hash, pin_plain, visible_rows)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [tripId, destination, dateIso, responsible, pinHash, pinPlain, INITIAL_PASSENGERS]
   );
 
-  const trip = await one(
-    `SELECT id, destination, date_iso, responsible, pin_plain, visible_rows, created_at
-     FROM trips
-     WHERE id = $1`,
+  return res.status(201).json({
+    trip: {
+      id: tripId,
+      destination,
+      dateIso,
+      responsible,
+      pin: pinPlain,
+      visibleRows: INITIAL_PASSENGERS
+    }
+  });
+}));
+
+app.post("/api/trips/:tripId/verify-pin", tripAccessLimiter, asyncHandler(async (req, res) => {
+  const parsed = verifyPinSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message || "PIN inválido" });
+  }
+
+  const tripId = req.params.tripId;
+  const pin = parsed.data.pin;
+
+  await verifyTripPinOrThrow(tripId, pin);
+  const trip = await getTripOr404(tripId, res);
+  if (!trip) return;
+
+  return res.json({
+    trip: {
+      id: trip.id,
+      destination: trip.destination,
+      dateIso: trip.date_iso,
+      responsible: trip.responsible,
+      visibleRows: trip.visible_rows
+    }
+  });
+}));
+
+app.get("/api/trips/:tripId", asyncHandler(async (req, res) => {
+  const tripId = req.params.tripId;
+  const pin = String(req.query.pin || "").trim();
+
+  if (!pin) {
+    return res.status(400).json({ error: "PIN é obrigatório" });
+  }
+
+  await verifyTripPinOrThrow(tripId, pin);
+  const trip = await getTripOr404(tripId, res);
+  if (!trip) return;
+
+  const passengers = await many(
+    `SELECT id, name, cpf, phone, created_at
+     FROM passengers
+     WHERE trip_id = $1
+     ORDER BY created_at ASC`,
     [tripId]
   );
 
-  scheduleBackup("trip_created");
-  res.json({ trip, pin });
+  return res.json({
+    trip: {
+      id: trip.id,
+      destination: trip.destination,
+      dateIso: trip.date_iso,
+      responsible: trip.responsible,
+      visibleRows: trip.visible_rows
+    },
+    passengers
+  });
 }));
 
-app.put("/api/trips/:id/layout", asyncHandler(async (req, res) => {
-  const tripId = String(req.params.id);
-  const data = updateVisibleRowsSchema.parse(req.body);
+app.put("/api/trips/:tripId/visible-rows", asyncHandler(async (req, res) => {
+  const parsed = updateVisibleRowsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message || "Dados inválidos" });
+  }
 
-  await verifyTripPinOrThrow(tripId, data.pin);
+  const tripId = req.params.tripId;
+  const { pin, visibleRows } = parsed.data;
+
+  await verifyTripPinOrThrow(tripId, pin);
 
   await q(
     `UPDATE trips
-     SET visible_rows = $1
-     WHERE id = $2`,
-    [data.visibleRows, tripId]
-  );
-
-  const trip = await one(
-    `SELECT id, destination, date_iso, responsible, pin_plain, visible_rows, created_at
-     FROM trips
+     SET visible_rows = $2
      WHERE id = $1`,
-    [tripId]
+    [tripId, visibleRows]
   );
 
-  scheduleBackup("trip_layout_updated");
-  res.json({ ok: true, trip });
+  return res.json({ visibleRows });
 }));
 
-app.post("/api/trips/:id/verify-pin", tripAccessLimiter, asyncHandler(async (req, res) => {
-  const tripId = String(req.params.id);
-  const { pin } = verifyPinSchema.parse(req.body);
+app.post("/api/trips/:tripId/passengers", asyncHandler(async (req, res) => {
+  const parsed = addPassengerSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message || "Dados inválidos" });
+  }
 
-  await verifyTripPinOrThrow(tripId, pin);
-  res.json({ ok: true });
-}));
-
-app.post("/api/trips/:id/load", tripAccessLimiter, asyncHandler(async (req, res) => {
-  const tripId = String(req.params.id);
-  const { pin } = verifyPinSchema.parse(req.body);
+  const tripId = req.params.tripId;
+  const { pin, name, cpf, phone } = parsed.data;
 
   await verifyTripPinOrThrow(tripId, pin);
 
-  const trip = await one(
-    `SELECT id, destination, date_iso, responsible, pin_plain, visible_rows, created_at
-     FROM trips
-     WHERE id = $1`,
-    [tripId]
+  const existing = await one(
+    `SELECT id FROM passengers WHERE trip_id = $1 AND cpf = $2`,
+    [tripId, cpf]
   );
 
-  const passengers = await getPassengersWithDocuments(tripId);
-  res.json({ trip, passengers });
-}));
-
-app.get("/api/trips/:id", asyncHandler(async (req, res) => {
-  const tripId = String(req.params.id);
-  const trip = await getTripOr404(tripId, res);
-  if (!trip) return;
-
-  const { pin_hash, ...safeTrip } = trip;
-  const passengers = await getPassengersWithDocuments(tripId);
-  res.json({ trip: safeTrip, passengers });
-}));
-
-// ===================
-// ROUTES - PASSENGERS
-// ===================
-app.post("/api/trips/:id/passengers", asyncHandler(async (req, res) => {
-  const tripId = String(req.params.id);
-  const data = addPassengerSchema.parse(req.body);
-
-  await verifyTripPinOrThrow(tripId, data.pin);
+  if (existing) {
+    return res.status(409).json({ error: "Já existe um passageiro com esse CPF nesta lista." });
+  }
 
   const passengerId = id12();
 
-  try {
-    await q(
-      `INSERT INTO passengers (id, trip_id, name, cpf, phone, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        passengerId,
-        tripId,
-        data.name,
-        data.cpf,
-        normalizePhone(data.phone),
-        nowIso(),
-      ]
-    );
-  } catch (err) {
-    if (err?.code === "23505") {
-      return res.status(409).json({ error: "Já existe um passageiro com esse CPF nesta viagem" });
-    }
-    throw err;
-  }
+  await q(
+    `INSERT INTO passengers (id, trip_id, name, cpf, phone)
+     VALUES ($1, $2, $3, $4, $5)`,
+    [passengerId, tripId, name, cpf, normalizePhone(phone)]
+  );
 
-  scheduleBackup("passenger_created");
-  res.json({ ok: true, passengerId });
+  return res.status(201).json({
+    passenger: {
+      id: passengerId,
+      name,
+      cpf,
+      phone: normalizePhone(phone)
+    }
+  });
 }));
 
 app.put("/api/trips/:tripId/passengers/:passengerId", asyncHandler(async (req, res) => {
-  const tripId = String(req.params.tripId);
-  const passengerId = String(req.params.passengerId);
-  const data = updatePassengerSchema.parse(req.body);
+  const parsed = updatePassengerSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message || "Dados inválidos" });
+  }
 
-  await verifyTripPinOrThrow(tripId, data.pin);
+  const tripId = req.params.tripId;
+  const passengerId = req.params.passengerId;
+  const { pin, name, cpf, phone } = parsed.data;
+
+  await verifyTripPinOrThrow(tripId, pin);
 
   const passenger = await one(
     `SELECT id FROM passengers WHERE id = $1 AND trip_id = $2`,
@@ -714,36 +562,77 @@ app.put("/api/trips/:tripId/passengers/:passengerId", asyncHandler(async (req, r
     return res.status(404).json({ error: "Passageiro não encontrado" });
   }
 
-  try {
-    await q(
-      `UPDATE passengers
-       SET name = $1, cpf = $2, phone = $3
-       WHERE id = $4 AND trip_id = $5`,
-      [
-        data.name,
-        data.cpf,
-        normalizePhone(data.phone),
-        passengerId,
-        tripId,
-      ]
-    );
-  } catch (err) {
-    if (err?.code === "23505") {
-      return res.status(409).json({ error: "Já existe um passageiro com esse CPF nesta viagem" });
-    }
-    throw err;
+  const duplicate = await one(
+    `SELECT id FROM passengers WHERE trip_id = $1 AND cpf = $2 AND id <> $3`,
+    [tripId, cpf, passengerId]
+  );
+
+  if (duplicate) {
+    return res.status(409).json({ error: "Já existe outro passageiro com esse CPF nesta lista." });
   }
 
-  scheduleBackup("passenger_updated");
-  res.json({ ok: true });
+  await q(
+    `UPDATE passengers
+     SET name = $3, cpf = $4, phone = $5
+     WHERE id = $1 AND trip_id = $2`,
+    [passengerId, tripId, name, cpf, normalizePhone(phone)]
+  );
+
+  return res.json({
+    passenger: {
+      id: passengerId,
+      name,
+      cpf,
+      phone: normalizePhone(phone)
+    }
+  });
 }));
 
 app.delete("/api/trips/:tripId/passengers/:passengerId", asyncHandler(async (req, res) => {
-  const tripId = String(req.params.tripId);
-  const passengerId = String(req.params.passengerId);
-  const data = deletePassengerSchema.parse(req.body || {});
+  const parsed = deletePassengerSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message || "PIN inválido" });
+  }
 
-  await verifyTripPinOrThrow(tripId, data.pin);
+  const tripId = req.params.tripId;
+  const passengerId = req.params.passengerId;
+  const { pin } = parsed.data;
+
+  await verifyTripPinOrThrow(tripId, pin);
+
+  const docs = await many(
+    `SELECT public_id FROM documents WHERE passenger_id = $1`,
+    [passengerId]
+  );
+
+  for (const doc of docs) {
+    try {
+      await cloudinary.uploader.destroy(doc.public_id, { resource_type: "raw" });
+    } catch {}
+  }
+
+  const result = await q(
+    `DELETE FROM passengers WHERE id = $1 AND trip_id = $2`,
+    [passengerId, tripId]
+  );
+
+  if (!result.rowCount) {
+    return res.status(404).json({ error: "Passageiro não encontrado" });
+  }
+
+  return res.json({ ok: true });
+}));
+
+app.post("/api/trips/:tripId/passengers/:passengerId/documents", uploadLimiter, upload.array("docs", 10), asyncHandler(async (req, res) => {
+  const tripId = req.params.tripId;
+  const passengerId = req.params.passengerId;
+  const pin = String(req.body.pin || "").trim();
+
+  if (!pin) {
+    return res.status(400).json({ error: "PIN é obrigatório" });
+  }
+
+  await verifyTripPinOrThrow(tripId, pin);
 
   const passenger = await one(
     `SELECT id FROM passengers WHERE id = $1 AND trip_id = $2`,
@@ -754,692 +643,343 @@ app.delete("/api/trips/:tripId/passengers/:passengerId", asyncHandler(async (req
     return res.status(404).json({ error: "Passageiro não encontrado" });
   }
 
-  await removePassengerDocumentsFromCloudinary(passengerId);
-  await q(`DELETE FROM passengers WHERE id = $1 AND trip_id = $2`, [passengerId, tripId]);
+  const files = req.files || [];
+  if (!files.length) {
+    return res.status(400).json({ error: "Nenhum arquivo enviado" });
+  }
 
-  scheduleBackup("passenger_deleted");
-  res.json({ ok: true });
-}));
+  const uploaded = [];
 
-// ===================
-// ROUTES - DOCUMENTS
-// ===================
-async function uploadFileToCloudinary(file, tripId, passengerId) {
-  const base64 = file.buffer.toString("base64");
-  const dataUri = `data:${file.mimetype};base64,${base64}`;
+  for (const file of files) {
+    const safeFileName = sanitizeName(file.originalname);
 
-  const result = await cloudinary.uploader.upload(dataUri, {
-    folder: `lonestur/${tripId}/${passengerId}`,
-    resource_type: "auto",
-  });
+    const stream = new PassThrough();
+    stream.end(file.buffer);
 
-  return result;
-}
-
-app.post(
-  "/api/trips/:tripId/passengers/:passengerId/documents",
-  uploadLimiter,
-  upload.array("files", 4),
-  asyncHandler(async (req, res) => {
-    const tripId = String(req.params.tripId);
-    const passengerId = String(req.params.passengerId);
-    const pin = String(req.body?.pin ?? "").trim();
-
-    if (!pin) {
-      return res.status(400).json({ error: "PIN é obrigatório" });
-    }
-
-    await verifyTripPinOrThrow(tripId, pin);
-
-    const passenger = await one(
-      `SELECT id FROM passengers WHERE id = $1 AND trip_id = $2`,
-      [passengerId, tripId]
-    );
-
-    if (!passenger) {
-      return res.status(404).json({ error: "Passageiro não encontrado" });
-    }
-
-    const files = req.files || [];
-    if (!files.length) {
-      return res.status(400).json({ error: "Nenhum arquivo enviado" });
-    }
-
-    const currentCount = await one(
-      `SELECT COUNT(*)::int AS total FROM documents WHERE passenger_id = $1`,
-      [passengerId]
-    );
-
-    if ((currentCount?.total || 0) + files.length > 4) {
-      return res.status(400).json({ error: "Máximo 4 arquivos por passageiro" });
-    }
-
-    const uploadPromises = files.map(async (f) => {
-      const result = await uploadFileToCloudinary(f, tripId, passengerId);
-      const docId = id12();
-
-      await q(
-        `INSERT INTO documents (id, passenger_id, filename, url, public_id, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          docId,
-          passengerId,
-          f.originalname || "documento",
-          result.secure_url,
-          result.public_id,
-          nowIso(),
-        ]
+    const result = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          resource_type: "raw",
+          folder: "lones-turismo/docs",
+          public_id: `${passengerId}-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`,
+          use_filename: true,
+          filename_override: safeFileName
+        },
+        (error, resultUpload) => {
+          if (error) reject(error);
+          else resolve(resultUpload);
+        }
       );
-
-      return {
-        id: docId,
-        filename: f.originalname || "documento",
-        url: result.secure_url,
-      };
+      stream.pipe(uploadStream);
     });
 
-    const uploaded = await Promise.all(uploadPromises);
+    const docId = id12();
 
-    scheduleBackup("documents_uploaded");
-    res.json({ ok: true, uploaded });
-  })
-);
+    await q(
+      `INSERT INTO documents (id, passenger_id, filename, url, public_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [docId, passengerId, safeFileName, result.secure_url, result.public_id]
+    );
+
+    uploaded.push({
+      id: docId,
+      filename: safeFileName,
+      url: result.secure_url
+    });
+  }
+
+  return res.status(201).json({ uploaded });
+}));
 
 // ===================
-// ROUTES - ADMIN TRIPS MANAGEMENT
+// ADMIN ROUTES
 // ===================
-async function listAdminTrips(req, res) {
-  const trips = await many(
-    `SELECT id, destination, date_iso, responsible, pin_plain, visible_rows, created_at
-     FROM trips
-     ORDER BY created_at DESC`
+app.post("/api/admin/login", asyncHandler(async (req, res) => {
+  const parsed = adminLoginSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.issues[0]?.message || "Dados inválidos" });
+  }
+
+  const user = process.env.ADMIN_USER || "admin";
+  const pass = process.env.ADMIN_PASS || "admin123";
+
+  if (parsed.data.user !== user || parsed.data.pass !== pass) {
+    return res.status(401).json({ error: "Usuário ou senha inválidos" });
+  }
+
+  const token = jwt.sign(
+    { role: "admin", user },
+    JWT_SECRET,
+    { expiresIn: "1h" }
   );
 
-  res.json({ trips });
-}
+  return res.json({ token });
+}));
 
-app.get("/api/admin/trips", authAdmin, asyncHandler(listAdminTrips));
-app.post("/api/admin/trips", authAdmin, asyncHandler(listAdminTrips));
-app.get("/admin/trips", authAdmin, asyncHandler(listAdminTrips));
-app.post("/admin/trips", authAdmin, asyncHandler(listAdminTrips));
+app.get("/api/admin/trips", authAdmin, asyncHandler(async (_req, res) => {
+  const trips = await many(
+    `SELECT id, destination, date_iso, responsible, pin_plain, created_at
+     FROM trips
+     ORDER BY date_iso DESC, created_at DESC`
+  );
 
-app.post("/api/admin/trips/:id/passengers", authAdmin, asyncHandler(async (req, res) => {
-  const tripId = String(req.params.id);
+  return res.json({
+    trips: trips.map((trip) => ({
+      id: trip.id,
+      destination: trip.destination,
+      dateIso: trip.date_iso,
+      responsible: trip.responsible,
+      pinPlain: trip.pin_plain,
+      createdAt: trip.created_at
+    }))
+  });
+}));
 
+app.get("/api/admin/trips/:tripId", authAdmin, asyncHandler(async (req, res) => {
+  const tripId = req.params.tripId;
   const trip = await getTripOr404(tripId, res);
   if (!trip) return;
 
-  const passengers = await getPassengersWithDocuments(tripId);
-  const { pin_hash, ...safeTrip } = trip;
+  const passengers = await many(
+    `SELECT id, name, cpf, phone, created_at
+     FROM passengers
+     WHERE trip_id = $1
+     ORDER BY created_at ASC`,
+    [tripId]
+  );
 
-  res.json({ trip: safeTrip, passengers });
+  return res.json({
+    trip: {
+      id: trip.id,
+      destination: trip.destination,
+      dateIso: trip.date_iso,
+      responsible: trip.responsible,
+      pinPlain: trip.pin_plain,
+      visibleRows: trip.visible_rows,
+      passengers
+    }
+  });
 }));
 
-app.get("/api/admin/trips/:id/passengers", authAdmin, asyncHandler(async (req, res) => {
-  const tripId = String(req.params.id);
+app.delete("/api/admin/trips/:tripId", authAdmin, asyncHandler(async (req, res) => {
+  const tripId = req.params.tripId;
 
   const trip = await getTripOr404(tripId, res);
   if (!trip) return;
-
-  const passengers = await getPassengersWithDocuments(tripId);
-  const { pin_hash, ...safeTrip } = trip;
-
-  res.json({ trip: safeTrip, passengers });
-}));
-
-app.get("/admin/trips/:id/passengers", authAdmin, asyncHandler(async (req, res) => {
-  const tripId = String(req.params.id);
-
-  const trip = await getTripOr404(tripId, res);
-  if (!trip) return;
-
-  const passengers = await getPassengersWithDocuments(tripId);
-  const { pin_hash, ...safeTrip } = trip;
-
-  res.json({ trip: safeTrip, passengers });
-}));
-
-async function deleteAdminTrip(req, res) {
-  const tripId = String(req.params.id);
-
-  const trip = await one(`SELECT id FROM trips WHERE id = $1`, [tripId]);
-  if (!trip) {
-    return res.status(404).json({ error: "Viagem não encontrada" });
-  }
 
   const passengers = await many(
     `SELECT id FROM passengers WHERE trip_id = $1`,
     [tripId]
   );
 
-  for (const p of passengers) {
-    await removePassengerDocumentsFromCloudinary(p.id);
+  for (const passenger of passengers) {
+    const docs = await many(
+      `SELECT public_id FROM documents WHERE passenger_id = $1`,
+      [passenger.id]
+    );
+
+    for (const doc of docs) {
+      try {
+        await cloudinary.uploader.destroy(doc.public_id, { resource_type: "raw" });
+      } catch {}
+    }
   }
 
   await q(`DELETE FROM trips WHERE id = $1`, [tripId]);
 
-  scheduleBackup("trip_deleted");
-  res.json({ ok: true });
+  return res.json({ ok: true });
+}));
+
+function getAdminTokenFromReq(req) {
+  const auth = req.headers.authorization || "";
+  if (auth.startsWith("Bearer ")) return auth.slice(7);
+
+  const tokenQuery = String(req.query.token || "").trim();
+  if (tokenQuery) return tokenQuery;
+
+  return null;
 }
 
-app.delete("/api/admin/trips/:id", authAdmin, asyncHandler(deleteAdminTrip));
-app.delete("/api/admin/trips/:id/purge", authAdmin, asyncHandler(deleteAdminTrip));
-app.delete("/admin/trips/:id", authAdmin, asyncHandler(deleteAdminTrip));
+function verifyAdminTokenForDownload(req, res, next) {
+  const token = getAdminTokenFromReq(req);
 
-// ===================
-// ROUTES - EXPORTS
-// ===================
-app.get("/api/admin/trips/:id/export/xlsx", authAdmin, asyncHandler(async (req, res) => {
-  const tripId = String(req.params.id);
-
-  const trip = await one(`SELECT * FROM trips WHERE id = $1`, [tripId]);
-  if (!trip) {
-    return res.status(404).json({ error: "Viagem não encontrada" });
+  if (!token) {
+    return res.status(401).json({ error: "Token ausente" });
   }
 
-  const passengers = await many(
-    `SELECT id, name, cpf, phone, created_at
-     FROM passengers
-     WHERE trip_id = $1
-     ORDER BY created_at ASC`,
-    [tripId]
-  );
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded?.role !== "admin") {
+      return res.status(403).json({ error: "Sem permissão" });
+    }
+    req.admin = decoded;
+    next();
+  } catch {
+    return res.status(401).json({ error: "Token inválido ou expirado" });
+  }
+}
 
+async function buildExcelBuffer(trip, passengers) {
   const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet("Passageiros");
+  const sheet = workbook.addWorksheet("Passageiros");
 
-  worksheet.columns = [
-    { header: "#", key: "index", width: 8 },
+  sheet.columns = [
     { header: "Nome", key: "name", width: 35 },
     { header: "CPF", key: "cpf", width: 20 },
-    { header: "Telefone", key: "phone", width: 20 },
-    { header: "Criado em", key: "created_at", width: 28 },
+    { header: "Telefone", key: "phone", width: 20 }
   ];
 
-  passengers.forEach((p, i) => {
-    worksheet.addRow({
-      index: i + 1,
+  sheet.addRow([]);
+  sheet.addRow(["Destino", trip.destination]);
+  sheet.addRow(["Data", trip.date_iso]);
+  sheet.addRow(["Responsável", trip.responsible]);
+  sheet.addRow(["ID", trip.id]);
+  sheet.addRow(["PIN", trip.pin_plain]);
+  sheet.addRow([]);
+
+  passengers.forEach((p) => {
+    sheet.addRow({
       name: p.name,
       cpf: formatCpfForExport(p.cpf),
-      phone: formatPhoneForExport(p.phone || ""),
-      created_at: p.created_at,
+      phone: formatPhoneForExport(p.phone)
     });
   });
 
-  const filename = `${sanitizeName(trip.destination)}-${trip.id}.xlsx`;
+  return workbook.xlsx.writeBuffer();
+}
 
-  res.setHeader(
-    "Content-Type",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-  );
-  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-
-  await workbook.xlsx.write(res);
-  res.end();
-}));
-
-app.get("/api/admin/trips/:id/export/docx", authAdmin, asyncHandler(async (req, res) => {
-  const tripId = String(req.params.id);
-
-  const trip = await one(`SELECT * FROM trips WHERE id = $1`, [tripId]);
-  if (!trip) {
-    return res.status(404).json({ error: "Viagem não encontrada" });
-  }
-
-  const passengers = await many(
-    `SELECT name, cpf, phone, created_at
-     FROM passengers
-     WHERE trip_id = $1
-     ORDER BY created_at ASC`,
-    [tripId]
-  );
-
+async function buildDocxBuffer(trip, passengers) {
   const rows = [
     new TableRow({
       children: [
-        new TableCell({ children: [new Paragraph("#")] }),
         new TableCell({ children: [new Paragraph("Nome")] }),
         new TableCell({ children: [new Paragraph("CPF")] }),
         new TableCell({ children: [new Paragraph("Telefone")] }),
-        new TableCell({ children: [new Paragraph("Criado em")] }),
-      ],
+      ]
     }),
-    ...passengers.map(
-      (p, i) =>
-        new TableRow({
-          children: [
-            new TableCell({ children: [new Paragraph(String(i + 1))] }),
-            new TableCell({ children: [new Paragraph(String(p.name || ""))] }),
-            new TableCell({ children: [new Paragraph(String(formatCpfForExport(p.cpf || "")))] }),
-            new TableCell({ children: [new Paragraph(String(formatPhoneForExport(p.phone || "")))] }),
-            new TableCell({ children: [new Paragraph(String(p.created_at || ""))] }),
-          ],
-        })
-    ),
-  ];
-
-  const doc = new Document({
-    sections: [
-      {
-        children: [
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: `Lista de passageiros - ${trip.destination}`,
-                bold: true,
-                size: 28,
-              }),
-            ],
-          }),
-          new Paragraph(`Responsável: ${trip.responsible}`),
-          new Paragraph(`Data: ${trip.date_iso}`),
-          new Paragraph(`PIN: ${trip.pin_plain || "-"}`),
-          new Paragraph(""),
-          new Table({ rows }),
-        ],
-      },
-    ],
-  });
-
-  const buffer = await Packer.toBuffer(doc);
-  const filename = `${sanitizeName(trip.destination)}-${trip.id}.docx`;
-
-  res.setHeader(
-    "Content-Type",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-  );
-  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-  res.send(buffer);
-}));
-
-app.get("/admin/trips/:id/export/excel", authAdmin, asyncHandler(async (req, res) => {
-  const tripId = String(req.params.id);
-
-  const trip = await one(`SELECT * FROM trips WHERE id = $1`, [tripId]);
-  if (!trip) {
-    return res.status(404).json({ error: "Viagem não encontrada" });
-  }
-
-  const passengers = await many(
-    `SELECT id, name, cpf, phone, created_at
-     FROM passengers
-     WHERE trip_id = $1
-     ORDER BY created_at ASC`,
-    [tripId]
-  );
-
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet("Passageiros");
-
-  worksheet.columns = [
-    { header: "#", key: "index", width: 8 },
-    { header: "Nome", key: "name", width: 35 },
-    { header: "CPF", key: "cpf", width: 20 },
-    { header: "Telefone", key: "phone", width: 20 },
-    { header: "Criado em", key: "created_at", width: 28 },
-  ];
-
-  passengers.forEach((p, i) => {
-    worksheet.addRow({
-      index: i + 1,
-      name: p.name,
-      cpf: formatCpfForExport(p.cpf),
-      phone: formatPhoneForExport(p.phone || ""),
-      created_at: p.created_at,
-    });
-  });
-
-  const filename = `${sanitizeName(trip.destination)}-${trip.id}.xlsx`;
-
-  res.setHeader(
-    "Content-Type",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-  );
-  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-
-  await workbook.xlsx.write(res);
-  res.end();
-}));
-
-app.get("/admin/trips/:id/export/doc", authAdmin, asyncHandler(async (req, res) => {
-  const tripId = String(req.params.id);
-
-  const trip = await one(`SELECT * FROM trips WHERE id = $1`, [tripId]);
-  if (!trip) {
-    return res.status(404).json({ error: "Viagem não encontrada" });
-  }
-
-  const passengers = await many(
-    `SELECT name, cpf, phone, created_at
-     FROM passengers
-     WHERE trip_id = $1
-     ORDER BY created_at ASC`,
-    [tripId]
-  );
-
-  const rows = [
-    new TableRow({
+    ...passengers.map((p) => new TableRow({
       children: [
-        new TableCell({ children: [new Paragraph("#")] }),
-        new TableCell({ children: [new Paragraph("Nome")] }),
-        new TableCell({ children: [new Paragraph("CPF")] }),
-        new TableCell({ children: [new Paragraph("Telefone")] }),
-        new TableCell({ children: [new Paragraph("Criado em")] }),
-      ],
-    }),
-    ...passengers.map(
-      (p, i) =>
-        new TableRow({
-          children: [
-            new TableCell({ children: [new Paragraph(String(i + 1))] }),
-            new TableCell({ children: [new Paragraph(String(p.name || ""))] }),
-            new TableCell({ children: [new Paragraph(String(formatCpfForExport(p.cpf || "")))] }),
-            new TableCell({ children: [new Paragraph(String(formatPhoneForExport(p.phone || "")))] }),
-            new TableCell({ children: [new Paragraph(String(p.created_at || ""))] }),
-          ],
-        })
-    ),
+        new TableCell({ children: [new Paragraph(p.name || "")] }),
+        new TableCell({ children: [new Paragraph(formatCpfForExport(p.cpf || ""))] }),
+        new TableCell({ children: [new Paragraph(formatPhoneForExport(p.phone || ""))] }),
+      ]
+    }))
   ];
 
   const doc = new Document({
-    sections: [
-      {
-        children: [
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: `Lista de passageiros - ${trip.destination}`,
-                bold: true,
-                size: 28,
-              }),
-            ],
-          }),
-          new Paragraph(`Responsável: ${trip.responsible}`),
-          new Paragraph(`Data: ${trip.date_iso}`),
-          new Paragraph(`PIN: ${trip.pin_plain || "-"}`),
-          new Paragraph(""),
-          new Table({ rows }),
-        ],
-      },
-    ],
+    sections: [{
+      children: [
+        new Paragraph({
+          children: [new TextRun({ text: "Lista de Passageiros", bold: true, size: 28 })]
+        }),
+        new Paragraph(`Destino: ${trip.destination}`),
+        new Paragraph(`Data: ${trip.date_iso}`),
+        new Paragraph(`Responsável: ${trip.responsible}`),
+        new Paragraph(`ID: ${trip.id}`),
+        new Paragraph(`PIN: ${trip.pin_plain}`),
+        new Paragraph(""),
+        new Table({ rows })
+      ]
+    }]
   });
 
-  const buffer = await Packer.toBuffer(doc);
-  const filename = `${sanitizeName(trip.destination)}-${trip.id}.docx`;
+  return Packer.toBuffer(doc);
+}
 
-  res.setHeader(
-    "Content-Type",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-  );
-  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-  res.send(buffer);
-}));
+app.get("/api/admin/trips/:tripId/export/zip", verifyAdminTokenForDownload, asyncHandler(async (req, res) => {
+  const tripId = req.params.tripId;
+  const trip = await getTripOr404(tripId, res);
+  if (!trip) return;
 
-async function exportDocumentsZip(req, res) {
-  const tripId = String(req.params.id);
+  const passengers = await getPassengersWithDocuments(tripId);
 
-  const trip = await one(`SELECT * FROM trips WHERE id = $1`, [tripId]);
-  if (!trip) {
-    return res.status(404).json({ error: "Viagem não encontrada" });
-  }
-
-  const passengers = await many(
-    `SELECT id, name, cpf, phone, created_at
-     FROM passengers
-     WHERE trip_id = $1
-     ORDER BY created_at ASC`,
-    [tripId]
-  );
+  const zipName = sanitizeName(`${trip.destination}-${trip.date_iso}-${trip.id}`) + ".zip";
 
   res.setHeader("Content-Type", "application/zip");
-  res.setHeader(
-    "Content-Disposition",
-    `attachment; filename="${sanitizeName(trip.destination)}-${trip.id}.zip"`
-  );
+  res.setHeader("Content-Disposition", `attachment; filename="${zipName}"`);
 
   const archive = archiver("zip", { zlib: { level: 9 } });
-
   archive.on("error", (err) => {
     throw err;
   });
-
   archive.pipe(res);
 
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet("Passageiros");
+  const excelBuffer = await buildExcelBuffer(trip, passengers);
+  archive.append(excelBuffer, { name: "lista-passageiros.xlsx" });
 
-  worksheet.columns = [
-    { header: "#", key: "index", width: 8 },
-    { header: "Nome", key: "name", width: 35 },
-    { header: "CPF", key: "cpf", width: 20 },
-    { header: "Telefone", key: "phone", width: 20 },
-    { header: "Criado em", key: "created_at", width: 28 },
-  ];
+  const docxBuffer = await buildDocxBuffer(trip, passengers);
+  archive.append(docxBuffer, { name: "lista-passageiros.docx" });
 
-  passengers.forEach((p, i) => {
-    worksheet.addRow({
-      index: i + 1,
-      name: p.name || "",
-      cpf: formatCpfForExport(p.cpf || ""),
-      phone: formatPhoneForExport(p.phone || ""),
-      created_at: p.created_at || "",
-    });
-  });
+  const manifest = {
+    trip: {
+      id: trip.id,
+      destination: trip.destination,
+      dateIso: trip.date_iso,
+      responsible: trip.responsible,
+      pin: trip.pin_plain
+    },
+    exportedAt: nowIso(),
+    passengers: passengers.map((p) => ({
+      id: p.id,
+      name: p.name,
+      cpf: formatCpfForExport(p.cpf),
+      phone: formatPhoneForExport(p.phone),
+      documents: (p.documents || []).map((d) => ({
+        id: d.id,
+        filename: d.filename,
+        url: d.url
+      }))
+    }))
+  };
 
-  const xlsxBuffer = await workbook.xlsx.writeBuffer();
-  archive.append(Buffer.from(xlsxBuffer), {
-    name: `lista-passageiros-${sanitizeName(trip.destination)}-${trip.id}.xlsx`,
-  });
-
-  const rows = [
-    new TableRow({
-      children: [
-        new TableCell({ children: [new Paragraph("#")] }),
-        new TableCell({ children: [new Paragraph("Nome")] }),
-        new TableCell({ children: [new Paragraph("CPF")] }),
-        new TableCell({ children: [new Paragraph("Telefone")] }),
-        new TableCell({ children: [new Paragraph("Criado em")] }),
-      ],
-    }),
-    ...passengers.map(
-      (p, i) =>
-        new TableRow({
-          children: [
-            new TableCell({ children: [new Paragraph(String(i + 1))] }),
-            new TableCell({ children: [new Paragraph(String(p.name || ""))] }),
-            new TableCell({
-              children: [new Paragraph(String(formatCpfForExport(p.cpf || "")))],
-            }),
-            new TableCell({
-              children: [new Paragraph(String(formatPhoneForExport(p.phone || "")))],
-            }),
-            new TableCell({
-              children: [new Paragraph(String(p.created_at || ""))],
-            }),
-          ],
-        })
-    ),
-  ];
-
-  const doc = new Document({
-    sections: [
-      {
-        children: [
-          new Paragraph({
-            children: [
-              new TextRun({
-                text: `Lista de passageiros - ${trip.destination}`,
-                bold: true,
-                size: 28,
-              }),
-            ],
-          }),
-          new Paragraph(`Responsável: ${trip.responsible}`),
-          new Paragraph(`Data: ${trip.date_iso}`),
-          new Paragraph(`PIN: ${trip.pin_plain || "-"}`),
-          new Paragraph(""),
-          new Table({ rows }),
-        ],
-      },
-    ],
-  });
-
-  const docxBuffer = await Packer.toBuffer(doc);
-  archive.append(docxBuffer, {
-    name: `lista-passageiros-${sanitizeName(trip.destination)}-${trip.id}.docx`,
-  });
+  archive.append(JSON.stringify(manifest, null, 2), { name: "manifest.json" });
 
   for (const passenger of passengers) {
-    const docs = await many(
-      `SELECT filename, url
-       FROM documents
-       WHERE passenger_id = $1
-       ORDER BY created_at ASC`,
-      [passenger.id]
-    );
+    const folder = sanitizeName(`${passenger.name}-${formatCpfForExport(passenger.cpf)}`);
 
-    for (const d of docs) {
-      if (!d.url) continue;
-
+    for (const doc of passenger.documents || []) {
       try {
-        const response = await fetch(d.url);
-        if (!response.ok) continue;
+        const fileResponse = await fetch(doc.url);
+        if (!fileResponse.ok) continue;
 
-        const buffer = Buffer.from(await response.arrayBuffer());
-        const folderName = sanitizeName(passenger.name || "passageiro");
-        const fileName = sanitizeName(d.filename || "arquivo");
-
-        archive.append(buffer, {
-          name: `documentos/${folderName}/${fileName}`,
+        const arrayBuffer = await fileResponse.arrayBuffer();
+        archive.append(Buffer.from(arrayBuffer), {
+          name: `documentos/${folder}/${sanitizeName(doc.filename)}`
         });
-      } catch (err) {
-        console.error("Erro ao baixar documento do Cloudinary:", err);
-      }
+      } catch {}
     }
   }
 
   await archive.finalize();
-}
-
-app.get("/api/admin/trips/:id/export/documents.zip", authAdmin, asyncHandler(exportDocumentsZip));
-app.get("/api/exports/:id/zip", authAdmin, asyncHandler(exportDocumentsZip));
-app.get("/admin/trips/:id/export/zip", authAdmin, asyncHandler(exportDocumentsZip));
-
-// ===================
-// ROUTES - BACKUPS
-// ===================
-app.get("/api/admin/backups", authAdmin, asyncHandler(async (req, res) => {
-  const backups = await many(
-    `SELECT id, trigger_type, backup_url, created_at,
-            jsonb_extract_path_text(snapshot, 'totals', 'trips') AS trips_count,
-            jsonb_extract_path_text(snapshot, 'totals', 'passengers') AS passengers_count,
-            jsonb_extract_path_text(snapshot, 'totals', 'documents') AS documents_count
-     FROM backups
-     ORDER BY created_at DESC
-     LIMIT 50`
-  );
-
-  res.json({ backups });
-}));
-
-app.post("/api/admin/backups/run", authAdmin, asyncHandler(async (req, res) => {
-  const backup = await createBackup("manual_admin");
-  res.json({ ok: true, backup });
-}));
-
-app.get("/api/admin/backups/:id/download", authAdmin, asyncHandler(async (req, res) => {
-  const backupId = String(req.params.id);
-  const backup = await one(
-    `SELECT id, snapshot, created_at FROM backups WHERE id = $1`,
-    [backupId]
-  );
-
-  if (!backup) {
-    return res.status(404).json({ error: "Backup não encontrado" });
-  }
-
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  res.setHeader("Content-Disposition", `attachment; filename="backup-${backupId}.json"`);
-  res.send(JSON.stringify(backup.snapshot, null, 2));
 }));
 
 // ===================
-// ERROR HANDLING
+// ERROR HANDLER
 // ===================
-app.all("/api/*", (req, res) => {
-  res.status(404).json({ error: "Rota não encontrada" });
-});
-
-app.use((err, req, res, next) => {
-  if (err instanceof z.ZodError) {
-    return res.status(400).json({
-      error: err.errors?.[0]?.message || "Dados inválidos",
-    });
-  }
-
-  const status = Number(err.status || 500);
+app.use((err, _req, res, _next) => {
   console.error(err);
-  res.status(status).json({
-    error: err.message || "Erro interno",
-  });
+
+  if (err?.name === "ZodError") {
+    return res.status(400).json({ error: err.issues?.[0]?.message || "Dados inválidos" });
+  }
+
+  if (err?.status) {
+    return res.status(err.status).json({ error: err.message || "Erro na requisição" });
+  }
+
+  return res.status(500).json({ error: "Erro interno do servidor" });
 });
 
 // ===================
-// START SERVER
+// START
 // ===================
-let server;
-
-async function start() {
-  await initDb();
-  try {
-    const count = await one(`SELECT COUNT(*)::int AS total FROM backups`);
-    if ((count?.total || 0) === 0) {
-      await createBackup("bootstrap");
-    }
-  } catch (err) {
-    console.error("Falha ao criar backup inicial:", err);
-  }
-
-  server = app.listen(PORT, () => {
-    console.log(`Backend rodando na porta ${PORT}`);
-    console.log("Banco: Neon/Postgres");
-  });
-}
-
-async function shutdown(signal) {
-  console.log(`\n${signal} recebido. Encerrando servidor...`);
-
-  if (backupTimer) {
-    clearTimeout(backupTimer);
-    try {
-      await createBackup("shutdown");
-      console.log("Backup final criado com sucesso");
-    } catch (err) {
-      console.error("Erro ao criar backup final:", err);
-    }
-  }
-
-  if (server) {
-    server.close(async () => {
-      console.log("Servidor HTTP fechado");
-      try {
-        await pool.end();
-        console.log("Conexões com banco encerradas");
-        process.exit(0);
-      } catch (err) {
-        console.error("Erro ao encerrar pool de conexões:", err);
-        process.exit(1);
-      }
+initDb()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Servidor rodando na porta ${PORT}`);
     });
-  } else {
-    process.exit(0);
-  }
-}
-
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
-
-start().catch((err) => {
-  console.error("Falha ao iniciar backend:", err);
-  process.exit(1);
-});
+  })
+  .catch((err) => {
+    console.error("Erro ao iniciar banco/servidor:", err);
+    process.exit(1);
+  });

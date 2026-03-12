@@ -1,64 +1,48 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
   <title>Lones Turismo - Viagens e Fretamento</title>
-  <meta name="description" content="Turismo e fretamento com conforto, segurança e pontualidade. Pacotes de viagens, ônibus leasing e atendimento rápido."/>
-
-  <link rel="stylesheet" href="/css/style.css"/>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      content: ["./**/*.{html,js}"],
-      theme: {
-        extend: {
-          colors: {
-            primary: "#0ea5e9",
-            secondary: "#f97316"
-          }
-        }
-      }
-    }
-  </script>
+  <meta
+    name="description"
+    content="Viagens, excursões e fretamento com conforto, segurança e atendimento rápido."
+  />
+  <link rel="stylesheet" href="/css/style.css" />
 </head>
-
 <body>
   <header class="topbar">
-    <div class="brand">
-      <a href="/" class="logo-link">
-        <img src="/img/logo-lones.png" alt="Lones Turismo">
+    <div class="container topbar-inner">
+      <a href="/" class="logo-link" aria-label="Voltar para a página inicial">
+        <img src="/img/logo-lones.png" alt="Lones Turismo" class="logo" />
       </a>
-    </div>
 
-    <nav class="menu">
-      <a href="/cadastro">Lista</a>
-      <a href="/admin">Admin</a>
-    </nav>
+      <nav class="menu" aria-label="Navegação principal">
+        <a href="/cadastro">Lista</a>
+        <a href="/admin">Admin</a>
+      </nav>
+    </div>
   </header>
 
   <main>
-    <section class="hero">
-      <div class="container hero-grid">
-        <div class="hero-card">
-          <span class="kicker">🚍 Turismo & Fretamento</span>
+    <section class="hero" id="inicio">
+      <div class="container">
+        <div class="hero-content">
+          <span class="hero-kicker">Turismo &amp; Fretamento</span>
+
           <h1>Viagens organizadas com conforto, segurança e pontualidade.</h1>
+
           <p>
             Pacotes completos, frota preparada e atendimento rápido.
-            Planeje sua próxima viagem com a Lones.
+            Planeje sua próxima viagem com a Lones Turismo.
           </p>
 
           <div class="hero-actions">
-            <a class="btn primary" href="#pacotes">Ver pacotes</a>
-            <a class="btn" href="#contato">Solicitar orçamento</a>
-          </div>
-        </div>
-
-        <div class="hero-media">
-          <div class="hero-badges">
-            <span class="badge">Conforto</span>
-            <span class="badge">Segurança</span>
-            <span class="badge">Pontualidade</span>
+            <a href="#pacotes" class="btn btn-primary">Ver pacotes</a>
+            <a href="#contato" class="btn btn-secondary">Solicitar orçamento</a>
           </div>
         </div>
       </div>
@@ -66,72 +50,87 @@
 
     <section class="section packages-section" id="pacotes">
       <div class="container">
-        <h2 class="packages-title">Pacotes em destaque</h2>
-        <p class="sub packages-sub">Os destinos mais procurados, com condição especial.</p>
+        <div class="section-heading">
+          <span class="section-badge">Pacotes</span>
+          <h2>Pacotes em destaque</h2>
+          <p>Os destinos mais procurados, com condição especial.</p>
+        </div>
 
-        <div class="travel-cards">
-          <article class="travel-card aparecida">
-            <div class="travel-card-overlay"></div>
-            <div class="travel-card-price">R$ 299</div>
+        <div class="packages-grid">
+          <article class="package-card">
+            <div class="package-media">
+              <img
+                src="/img/aparecida.jpg"
+                alt="Pacote para Aparecida do Norte"
+              />
+            </div>
 
-            <div class="travel-card-content">
+            <div class="package-body">
+              <div class="package-price">R$ 299</div>
               <h3>Pacote Aparecida • SP</h3>
               <p>
                 Aparecida do Norte com roteiro especial, fé, passeio e conforto
                 durante toda a viagem.
               </p>
-
               <a
-                class="travel-card-btn"
-                href="https://wa.me/5566999999999?text=Tenho%20interesse%20no%20pacote%20de%20Aparecida."
+                href="https://wa.me/5500000000000?text=Olá!%20Quero%20saber%20mais%20sobre%20o%20pacote%20de%20Aparecida."
                 target="_blank"
                 rel="noopener noreferrer"
+                class="btn btn-card"
               >
-                Saiba Mais
+                Saiba mais
               </a>
             </div>
           </article>
 
-          <article class="travel-card caldas">
-            <div class="travel-card-overlay"></div>
-            <div class="travel-card-price">R$ 2.900</div>
+          <article class="package-card">
+            <div class="package-media">
+              <img
+                src="/img/caldas-novas.jpg"
+                alt="Pacote para Caldas Novas"
+              />
+            </div>
 
-            <div class="travel-card-content">
+            <div class="package-body">
+              <div class="package-price">R$ 2.900</div>
               <h3>Pacote Caldas Novas • GO</h3>
               <p>
                 Pacote completo com transporte, hospedagem e lazer para você
                 relaxar e aproveitar dias especiais.
               </p>
-
               <a
-                class="travel-card-btn"
-                href="https://wa.me/5566999999999?text=Tenho%20interesse%20no%20pacote%20de%20Caldas%20Novas."
+                href="https://wa.me/5500000000000?text=Olá!%20Quero%20saber%20mais%20sobre%20o%20pacote%20de%20Caldas%20Novas."
                 target="_blank"
                 rel="noopener noreferrer"
+                class="btn btn-card"
               >
-                Saiba Mais
+                Saiba mais
               </a>
             </div>
           </article>
 
-          <article class="travel-card campos">
-            <div class="travel-card-overlay"></div>
-            <div class="travel-card-price">R$ 399</div>
+          <article class="package-card">
+            <div class="package-media">
+              <img
+                src="/img/campos-jordao.jpg"
+                alt="Pacote para Campos do Jordão"
+              />
+            </div>
 
-            <div class="travel-card-content">
+            <div class="package-body">
+              <div class="package-price">R$ 399</div>
               <h3>Pacote Campos do Jordão • SP</h3>
               <p>
                 Viagem com passeio especial, clima de serra e belas paisagens
                 para curtir com conforto.
               </p>
-
               <a
-                class="travel-card-btn"
-                href="https://wa.me/5566999999999?text=Tenho%20interesse%20no%20pacote%20de%20Campos%20do%20Jord%C3%A3o."
+                href="https://wa.me/5500000000000?text=Olá!%20Quero%20saber%20mais%20sobre%20o%20pacote%20de%20Campos%20do%20Jordão."
                 target="_blank"
                 rel="noopener noreferrer"
+                class="btn btn-card"
               >
-                Saiba Mais
+                Saiba mais
               </a>
             </div>
           </article>
@@ -139,61 +138,150 @@
       </div>
     </section>
 
-    <section class="section" id="frota">
+    <section class="section fleet-section" id="frota">
       <div class="container">
-        <h2>Nossa frota</h2>
-        <p class="sub">Conforto e estrutura para viagens curtas e longas.</p>
+        <div class="section-heading">
+          <span class="section-badge">Nossa frota</span>
+          <h2>Conforto de verdade para viagens curtas e longas</h2>
+          <p>
+            Veículos preparados para excursões, grupos, turismo e fretamento.
+          </p>
+        </div>
 
-        <div class="grid">
-          <article class="card">
-            <div class="content">
-              <p class="title">Ônibus Leitos Double-Deck</p>
-              <p class="meta">Ar-condicionado • Poltronas reclináveis</p>
+        <div class="fleet-grid">
+          <article class="fleet-card">
+            <div class="fleet-media">
+              <img
+                src="/img/onibus-double-deck.jpg"
+                alt="Ônibus leito double deck"
+              />
+            </div>
+
+            <div class="fleet-body">
+              <h3>Ônibus Leito Double-Deck</h3>
+              <p class="fleet-text">
+                Mais conforto para viagens longas, grupos maiores e roteiros
+                especiais.
+              </p>
+
+              <ul class="fleet-features">
+                <li>Ar-condicionado</li>
+                <li>Poltronas reclináveis</li>
+                <li>Bagageiro amplo</li>
+                <li>Ideal para longas distâncias</li>
+              </ul>
             </div>
           </article>
 
-          <article class="card">
-            <div class="content">
-              <p class="title">Ônibus Leito Turismo</p>
-              <p class="meta">Ideal para grupos menores e fretamentos</p>
+          <article class="fleet-card">
+            <div class="fleet-media">
+              <img
+                src="/img/onibus-turismo.jpg"
+                alt="Ônibus de turismo"
+              />
+            </div>
+
+            <div class="fleet-body">
+              <h3>Ônibus Leito Turismo</h3>
+              <p class="fleet-text">
+                Opção versátil para grupos, excursões regionais e fretamentos.
+              </p>
+
+              <ul class="fleet-features">
+                <li>Conforto para grupos</li>
+                <li>Ótimo para fretamentos</li>
+                <li>Viagens regionais e interestaduais</li>
+                <li>Atendimento sob demanda</li>
+              </ul>
             </div>
           </article>
         </div>
       </div>
     </section>
 
-    <section class="section" id="contato">
+    <section class="section contact-section" id="contato">
       <div class="container">
-        <h2>Fale com a Lones</h2>
-        <p class="sub">Peça um orçamento ou tire dúvidas em poucos minutos.</p>
+        <div class="contact-box">
+          <div class="contact-text">
+            <span class="section-badge">Contato</span>
+            <h2>Fale com a Lones</h2>
+            <p>
+              Peça um orçamento ou tire dúvidas em poucos minutos.
+            </p>
+          </div>
 
-        <div class="hero-actions">
-          <a
-            class="btn primary"
-            href="https://wa.me/5566999999999?text=Ol%C3%A1%2C%20quero%20solicitar%20um%20or%C3%A7amento."
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            📱 Chamar no WhatsApp
-          </a>
+          <div class="contact-actions">
+            <a
+              href="https://wa.me/5500000000000"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn btn-primary"
+            >
+              Chamar no WhatsApp
+            </a>
 
-          <a
-            class="btn"
-            href="mailto:lonesturismo@gmail.com?subject=Orçamento%20de%20viagem"
-          >
-            ✉️ Enviar e-mail
-          </a>
+            <a href="mailto:contato@lonesturismo.com.br" class="btn btn-secondary">
+              Enviar e-mail
+            </a>
+          </div>
         </div>
       </div>
     </section>
   </main>
 
-  <footer class="footer">
-    <div class="container">
-      <small>© Lones Turismo • Todos os direitos reservados</small>
+  <footer class="site-footer">
+    <div class="container footer-grid">
+      <div class="footer-col">
+        <h3>Lones Turismo</h3>
+        <p>
+          Especializada em viagens, excursões e fretamento, com foco em
+          conforto, organização e atendimento rápido.
+        </p>
+      </div>
+
+      <div class="footer-col">
+        <h4>Links rápidos</h4>
+        <ul>
+          <li><a href="#inicio">Início</a></li>
+          <li><a href="#pacotes">Pacotes</a></li>
+          <li><a href="#frota">Nossa frota</a></li>
+          <li><a href="#contato">Contato</a></li>
+          <li><a href="/cadastro">Lista</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Contato</h4>
+        <ul>
+          <li>WhatsApp: (00) 00000-0000</li>
+          <li>E-mail: contato@lonesturismo.com.br</li>
+          <li>Atendimento: Seg a Sáb</li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Atendimento</h4>
+        <p>
+          Solicite orçamento para excursões, viagens religiosas, turismo em
+          grupo e fretamento.
+        </p>
+
+        <a
+          href="https://wa.me/5500000000000"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="footer-whatsapp"
+        >
+          Falar no WhatsApp
+        </a>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <div class="container">
+        <p>© 2026 Lones Turismo. Todos os direitos reservados.</p>
+      </div>
     </div>
   </footer>
-
-  <script src="/js/app.js"></script>
 </body>
 </html>

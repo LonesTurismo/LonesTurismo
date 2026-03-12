@@ -38,7 +38,7 @@ body {
 }
 
 .container {
-  width: min(1280px, 94%);
+  width: min(12500px, 98%);
   margin: 0 auto;
 }
 
@@ -81,9 +81,9 @@ body {
   margin-top: 10px;
 }
 
-/* Topbar */
+/* Header antigo */
 .topbar {
-  background: rgba(11, 18, 32, 0.72);
+  background: rgba(11, 18, 32, 0.7);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -102,26 +102,6 @@ body {
 .logo {
   height: 90px;
   width: auto;
-}
-
-.logo-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  text-decoration: none;
-  color: var(--text);
-}
-
-.logo-link img {
-  height: 54px;
-  width: auto;
-  display: block;
-}
-
-.menu {
-  display: flex;
-  gap: 8px;
-  align-items: center;
 }
 
 .menu a {
@@ -154,6 +134,20 @@ body {
   padding: 14px 0;
 }
 
+.logo-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.logo-link img {
+  height: 54px;
+  width: auto;
+  display: block;
+}
+
 .nav {
   display: flex;
   gap: 18px;
@@ -179,7 +173,7 @@ body {
   border: 1px solid var(--border);
 }
 
-/* Cards e blocos gerais */
+/* Cards e blocos */
 .card {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -293,7 +287,7 @@ select:-webkit-autofill {
   transition: background-color 9999s ease-in-out 0s;
 }
 
-/* Botões gerais */
+/* Botões */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -308,7 +302,6 @@ select:-webkit-autofill {
   cursor: pointer;
   text-decoration: none;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-  transition: transform 0.2s ease;
 }
 
 .btn:hover {
@@ -419,7 +412,7 @@ select:-webkit-autofill {
   border-radius: var(--radius);
   background:
     linear-gradient(180deg, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.35)),
-    url("/img/hero.jpg") center/cover no-repeat;
+    url("img/hero.jpg") center/cover no-repeat;
   box-shadow: var(--shadow);
   min-height: 320px;
   position: relative;
@@ -450,7 +443,7 @@ select:-webkit-autofill {
   color: var(--muted);
 }
 
-/* Cards antigos */
+/* Cards de conteúdo */
 .card .thumb {
   height: 150px;
   background: rgba(255, 255, 255, 0.06);
@@ -490,144 +483,43 @@ select:-webkit-autofill {
   gap: 10px;
 }
 
-/* ===== NOVOS CARDS DE PACOTES ===== */
-.packages-section {
-  padding-top: 34px;
-}
-
-.packages-title {
-  text-align: center;
-  font-size: clamp(32px, 4vw, 62px) !important;
-  line-height: 1.05;
-  margin-bottom: 10px !important;
-  font-weight: 900;
-  letter-spacing: -1px;
-}
-
-.packages-sub {
-  text-align: center;
-  font-size: clamp(16px, 2vw, 22px);
-  margin-bottom: 34px !important;
-}
-
-.travel-cards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
-}
-
-.travel-card {
-  position: relative;
-  min-height: 640px;
-  border-radius: 28px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.38);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  display: flex;
-  align-items: flex-end;
-  isolation: isolate;
-}
-
-.travel-card.aparecida {
-  background-image: url("/img/aparecida.jpg");
-}
-
-.travel-card.caldas {
-  background-image: url("/img/caldas-novas.jpg");
-}
-
-.travel-card.campos {
-  background-image: url("/img/campos-jordao.jpg");
-}
-
-.travel-card-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background:
-    linear-gradient(
-      180deg,
-      rgba(0, 0, 0, 0.04) 0%,
-      rgba(0, 0, 0, 0.10) 18%,
-      rgba(0, 0, 0, 0.26) 45%,
-      rgba(2, 8, 20, 0.72) 75%,
-      rgba(2, 8, 20, 0.96) 100%
-    );
-}
-
-.travel-card-price {
-  position: absolute;
-  top: 22px;
-  right: 22px;
-  z-index: 3;
-  background: rgba(18, 24, 38, 0.82);
-  color: #fff;
-  padding: 16px 28px;
-  border-radius: 22px;
-  font-size: clamp(28px, 2.3vw, 38px);
-  font-weight: 900;
-  line-height: 1;
-  backdrop-filter: blur(8px);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
-}
-
-.travel-card-content {
-  position: relative;
-  z-index: 3;
-  width: 100%;
-  padding: 0 28px 28px;
-}
-
-.travel-card-content h3 {
-  margin: 0 0 14px;
-  color: #fff;
-  font-size: clamp(26px, 2vw, 40px);
-  line-height: 1.12;
-  font-weight: 900;
-  letter-spacing: -0.5px;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
-}
-
-.travel-card-content p {
-  margin: 0 0 24px;
-  color: rgba(255, 255, 255, 0.92);
-  font-size: clamp(16px, 1.1vw, 20px);
-  line-height: 1.48;
-  max-width: 95%;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
-}
-
-.travel-card-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 170px;
-  min-height: 62px;
-  padding: 0 28px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #2563eb, #3b82f6);
-  color: #fff;
-  text-decoration: none;
-  font-size: 18px;
-  font-weight: 800;
-  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.42);
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
-}
-
-.travel-card-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 16px 34px rgba(37, 99, 235, 0.5);
-}
-
 /* Footer */
 .footer {
   border-top: 1px solid var(--border);
   background: rgba(0, 0, 0, 0.2);
   padding: 26px 0;
   color: var(--muted);
+}
+
+/* Responsivo */
+@media (max-width: 920px) {
+  .hero-grid,
+  .grid,
+  .grid-3,
+  .grid-4,
+  .pass-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .nav {
+    display: none;
+  }
+
+  .topbar {
+    padding: 14px 16px;
+  }
+
+  .page {
+    padding: 18px;
+  }
+
+  .logo {
+    height: 72px;
+  }
+
+  .logo-link img {
+    height: 48px;
+  }
 }
 
 /* ===== Tabela da lista de passageiros ===== */
@@ -654,6 +546,7 @@ select:-webkit-autofill {
 
 .list-table tbody td {
   padding: 0 10px;
+  vertical-align: middle;
 }
 
 .list-table th:nth-child(1),
@@ -745,115 +638,8 @@ select:-webkit-autofill {
   line-height: 1.2;
 }
 
-/* Responsivo */
-@media (max-width: 1200px) {
-  .travel-cards {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .travel-card {
-    min-height: 560px;
-  }
-}
-
 @media (max-width: 920px) {
-  .hero-grid,
-  .grid,
-  .grid-3,
-  .grid-4,
-  .pass-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .travel-cards {
-    grid-template-columns: 1fr;
-  }
-
-  .nav {
-    display: none;
-  }
-
-  .topbar {
-    padding: 14px 16px;
-  }
-
-  .page {
-    padding: 18px;
-  }
-
-  .logo {
-    height: 72px;
-  }
-
-  .logo-link img {
-    height: 48px;
-  }
-
-  .packages-title {
-    font-size: 42px !important;
-  }
-
-  .travel-card {
-    min-height: 500px;
-    border-radius: 24px;
-  }
-
-  .travel-card-price {
-    top: 16px;
-    right: 16px;
-    padding: 12px 18px;
-    font-size: 28px;
-    border-radius: 18px;
-  }
-
-  .travel-card-content {
-    padding: 0 20px 20px;
-  }
-
-  .travel-card-content h3 {
-    font-size: 28px;
-  }
-
-  .travel-card-content p {
-    font-size: 16px;
-    max-width: 100%;
-  }
-
-  .travel-card-btn {
-    min-height: 54px;
-    min-width: 150px;
-    font-size: 16px;
-    padding: 0 22px;
-  }
-
   .list-table {
     min-width: 1080px;
-  }
-}
-
-@media (max-width: 560px) {
-  .packages-title {
-    font-size: 34px !important;
-  }
-
-  .packages-sub {
-    font-size: 16px;
-  }
-
-  .travel-card {
-    min-height: 430px;
-  }
-
-  .travel-card-content h3 {
-    font-size: 22px;
-  }
-
-  .travel-card-content p {
-    font-size: 14px;
-    line-height: 1.45;
-  }
-
-  .travel-card-price {
-    font-size: 22px;
   }
 }

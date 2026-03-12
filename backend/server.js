@@ -43,6 +43,9 @@ const PORT = Number(process.env.PORT || 3001);
 const JWT_SECRET = process.env.JWT_SECRET || "CHANGE_ME";
 const DATABASE_URL = process.env.DATABASE_URL;
 
+const INITIAL_PASSENGERS = 46;
+const MAX_PASSENGERS = 70;
+
 if (!DATABASE_URL) {
   throw new Error("DATABASE_URL não configurada");
 }
@@ -57,9 +60,8 @@ const pool = new Pool({
   connectionTimeoutMillis: 15000,
 });
 
-// Database connection health check
-pool.on('error', (err) => {
-  console.error('Unexpected database pool error:', err);
+pool.on("error", (err) => {
+  console.error("Unexpected database pool error:", err);
 });
 
 // ===================
@@ -95,7 +97,6 @@ const uploadLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Apply rate limiters
 app.use("/api/admin/login", loginLimiter);
 app.use("/admin/login", loginLimiter);
 app.use("/api/admin/", uploadLimiter);
@@ -106,24 +107,23 @@ app.use("/api/", generalLimiter);
 // ===================
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
     const allowedOrigins = [
       process.env.FRONTEND_URL,
-      'https://lones-turismo.vercel.app',
-      'http://localhost:3000',
-      'http://localhost:5500',
-      'http://127.0.0.1:5500'
+      "https://lones-turismo.vercel.app",
+      "http://localhost:3000",
+      "http://localhost:5500",
+      "http://127.0.0.1:5500"
     ].filter(Boolean);
-    
+
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      callback(new Error("Not allowed by CORS"));
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
 };
 
 app.use(cors(corsOptions));
@@ -131,9 +131,9 @@ app.use(cors(corsOptions));
 // ===================
 // MIDDLEWARE & UTILS
 // ===================
-const upload = multer({ 
+const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit per file
+  limits: { fileSize: 10 * 1024 * 1024 }
 });
 
 const nowIso = () => new Date().toISOString();
@@ -202,6 +202,11 @@ const verifyPinSchema = z.object({
   pin: z.string().trim().min(4, "PIN inválido"),
 });
 
+const updateVisibleRowsSchema = z.object({
+  pin: z.string().trim().min(4, "PIN é obrigatório"),
+  visibleRows: z.coerce.number().int().min(INITIAL_PASSENGERS).max(MAX_PASSENGERS),
+});
+
 const addPassengerSchema = z.object({
   pin: z.string().trim().min(4, "PIN é obrigatório"),
   name: z.string().trim().min(3, "Nome deve ter pelo menos 3 caracteres"),
@@ -263,7 +268,7 @@ function authAdmin(req, res, next) {
 // ===================
 async function getTripOr404(tripId, res) {
   const trip = await one(
-    `SELECT id, destination, date_iso, responsible, pin_hash, pin_plain, created_at
+    `SELECT id, destination, date_iso, responsible, visible_rows, pin_hash, pin_plain, created_at
      FROM trips
      WHERE id = $1`,
     [tripId]
@@ -278,7 +283,11 @@ async function getTripOr404(tripId, res) {
 }
 
 async function verifyTripPinOrThrow(tripId, pin) {
-  const trip = await one(`SELECT id, pin_hash FROM trips WHERE id = $1`, [tripId]);
+  const trip = await one(
+    `SELECT id, pin_hash FROM trips WHERE id = $1`,
+    [tripId]
+  );
+
   if (!trip) {
     const err = new Error("Viagem não encontrada");
     err.status = 404;
@@ -345,8 +354,20 @@ async function initDb() {
       responsible TEXT NOT NULL,
       pin_hash TEXT NOT NULL,
       pin_plain TEXT,
+      visible_rows INTEGER NOT NULL DEFAULT 46,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+  `);
+
+  await q(`
+    ALTER TABLE trips
+    ADD COLUMN IF NOT EXISTS visible_rows INTEGER NOT NULL DEFAULT 46;
+  `);
+
+  await q(`
+    UPDATE trips
+    SET visible_rows = 46
+    WHERE visible_rows IS NULL;
   `);
 
   await q(`
@@ -393,7 +414,7 @@ async function initDb() {
 // ===================
 async function buildBackupSnapshot() {
   const trips = await many(
-    `SELECT id, destination, date_iso, responsible, pin_plain, created_at
+    `SELECT id, destination, date_iso, responsible, pin_plain, visible_rows, created_at
      FROM trips
      ORDER BY created_at DESC`
   );
@@ -505,7 +526,7 @@ app.post("/trip/access", tripAccessLimiter, asyncHandler(async (req, res) => {
   await verifyTripPinOrThrow(data.tripId, data.pin);
 
   const trip = await one(
-    `SELECT id, destination, date_iso, responsible, pin_plain, created_at
+    `SELECT id, destination, date_iso, responsible, pin_plain, visible_rows, created_at
      FROM trips
      WHERE id = $1`,
     [data.tripId]
@@ -537,7 +558,6 @@ app.post("/api/admin/login", asyncHandler(async (req, res) => {
   res.json({ success: true, token });
 }));
 
-// Alias route for /admin/login (without /api prefix)
 app.post("/admin/login", asyncHandler(async (req, res) => {
   const data = adminLoginSchema.parse(req.body);
 
@@ -568,13 +588,13 @@ app.post("/api/trips", asyncHandler(async (req, res) => {
   const pinHash = await bcrypt.hash(pin, 10);
 
   await q(
-    `INSERT INTO trips (id, destination, date_iso, responsible, pin_hash, pin_plain, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [tripId, data.destination, data.dateIso, data.responsible, pinHash, pin, nowIso()]
+    `INSERT INTO trips (id, destination, date_iso, responsible, pin_hash, pin_plain, visible_rows, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [tripId, data.destination, data.dateIso, data.responsible, pinHash, pin, INITIAL_PASSENGERS, nowIso()]
   );
 
   const trip = await one(
-    `SELECT id, destination, date_iso, responsible, pin_plain, created_at
+    `SELECT id, destination, date_iso, responsible, pin_plain, visible_rows, created_at
      FROM trips
      WHERE id = $1`,
     [tripId]
@@ -582,6 +602,30 @@ app.post("/api/trips", asyncHandler(async (req, res) => {
 
   scheduleBackup("trip_created");
   res.json({ trip, pin });
+}));
+
+app.put("/api/trips/:id/layout", asyncHandler(async (req, res) => {
+  const tripId = String(req.params.id);
+  const data = updateVisibleRowsSchema.parse(req.body);
+
+  await verifyTripPinOrThrow(tripId, data.pin);
+
+  await q(
+    `UPDATE trips
+     SET visible_rows = $1
+     WHERE id = $2`,
+    [data.visibleRows, tripId]
+  );
+
+  const trip = await one(
+    `SELECT id, destination, date_iso, responsible, pin_plain, visible_rows, created_at
+     FROM trips
+     WHERE id = $1`,
+    [tripId]
+  );
+
+  scheduleBackup("trip_layout_updated");
+  res.json({ ok: true, trip });
 }));
 
 app.post("/api/trips/:id/verify-pin", tripAccessLimiter, asyncHandler(async (req, res) => {
@@ -599,7 +643,7 @@ app.post("/api/trips/:id/load", tripAccessLimiter, asyncHandler(async (req, res)
   await verifyTripPinOrThrow(tripId, pin);
 
   const trip = await one(
-    `SELECT id, destination, date_iso, responsible, pin_plain, created_at
+    `SELECT id, destination, date_iso, responsible, pin_plain, visible_rows, created_at
      FROM trips
      WHERE id = $1`,
     [tripId]
@@ -720,7 +764,6 @@ app.delete("/api/trips/:tripId/passengers/:passengerId", asyncHandler(async (req
 // ===================
 // ROUTES - DOCUMENTS
 // ===================
-// Helper function for parallel document uploads
 async function uploadFileToCloudinary(file, tripId, passengerId) {
   const base64 = file.buffer.toString("base64");
   const dataUri = `data:${file.mimetype};base64,${base64}`;
@@ -771,7 +814,6 @@ app.post(
       return res.status(400).json({ error: "Máximo 4 arquivos por passageiro" });
     }
 
-    // Parallel upload for better performance
     const uploadPromises = files.map(async (f) => {
       const result = await uploadFileToCloudinary(f, tripId, passengerId);
       const docId = id12();
@@ -808,7 +850,7 @@ app.post(
 // ===================
 async function listAdminTrips(req, res) {
   const trips = await many(
-    `SELECT id, destination, date_iso, responsible, pin_plain, created_at
+    `SELECT id, destination, date_iso, responsible, pin_plain, visible_rows, created_at
      FROM trips
      ORDER BY created_at DESC`
   );
@@ -818,8 +860,6 @@ async function listAdminTrips(req, res) {
 
 app.get("/api/admin/trips", authAdmin, asyncHandler(listAdminTrips));
 app.post("/api/admin/trips", authAdmin, asyncHandler(listAdminTrips));
-
-// Alias routes without /api prefix
 app.get("/admin/trips", authAdmin, asyncHandler(listAdminTrips));
 app.post("/admin/trips", authAdmin, asyncHandler(listAdminTrips));
 
@@ -847,7 +887,6 @@ app.get("/api/admin/trips/:id/passengers", authAdmin, asyncHandler(async (req, r
   res.json({ trip: safeTrip, passengers });
 }));
 
-// Alias route without /api prefix
 app.get("/admin/trips/:id/passengers", authAdmin, asyncHandler(async (req, res) => {
   const tripId = String(req.params.id);
 
@@ -885,8 +924,6 @@ async function deleteAdminTrip(req, res) {
 
 app.delete("/api/admin/trips/:id", authAdmin, asyncHandler(deleteAdminTrip));
 app.delete("/api/admin/trips/:id/purge", authAdmin, asyncHandler(deleteAdminTrip));
-
-// Alias route without /api prefix
 app.delete("/admin/trips/:id", authAdmin, asyncHandler(deleteAdminTrip));
 
 // ===================
@@ -1015,9 +1052,7 @@ app.get("/api/admin/trips/:id/export/docx", authAdmin, asyncHandler(async (req, 
   res.send(buffer);
 }));
 
-// Alias export routes without /api prefix
 app.get("/admin/trips/:id/export/excel", authAdmin, asyncHandler(async (req, res) => {
-  // Redirect to xlsx export
   const tripId = String(req.params.id);
 
   const trip = await one(`SELECT * FROM trips WHERE id = $1`, [tripId]);
@@ -1067,7 +1102,6 @@ app.get("/admin/trips/:id/export/excel", authAdmin, asyncHandler(async (req, res
 }));
 
 app.get("/admin/trips/:id/export/doc", authAdmin, asyncHandler(async (req, res) => {
-  // Redirect to docx export
   const tripId = String(req.params.id);
 
   const trip = await one(`SELECT * FROM trips WHERE id = $1`, [tripId]);
@@ -1171,9 +1205,6 @@ async function exportDocumentsZip(req, res) {
 
   archive.pipe(res);
 
-  // =========================
-  // 1) GERAR XLSX EM MEMÓRIA
-  // =========================
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet("Passageiros");
 
@@ -1200,9 +1231,6 @@ async function exportDocumentsZip(req, res) {
     name: `lista-passageiros-${sanitizeName(trip.destination)}-${trip.id}.xlsx`,
   });
 
-  // =========================
-  // 2) GERAR DOCX EM MEMÓRIA
-  // =========================
   const rows = [
     new TableRow({
       children: [
@@ -1261,9 +1289,6 @@ async function exportDocumentsZip(req, res) {
     name: `lista-passageiros-${sanitizeName(trip.destination)}-${trip.id}.docx`,
   });
 
-  // =======================================
-  // 3) ADICIONAR DOCUMENTOS DOS PASSAGEIROS
-  // =======================================
   for (const passenger of passengers) {
     const docs = await many(
       `SELECT filename, url
@@ -1298,8 +1323,6 @@ async function exportDocumentsZip(req, res) {
 
 app.get("/api/admin/trips/:id/export/documents.zip", authAdmin, asyncHandler(exportDocumentsZip));
 app.get("/api/exports/:id/zip", authAdmin, asyncHandler(exportDocumentsZip));
-
-// Alias route without /api prefix
 app.get("/admin/trips/:id/export/zip", authAdmin, asyncHandler(exportDocumentsZip));
 
 // ===================
@@ -1383,13 +1406,11 @@ async function start() {
   });
 }
 
-// Graceful shutdown handling
 async function shutdown(signal) {
   console.log(`\n${signal} recebido. Encerrando servidor...`);
-  
+
   if (backupTimer) {
     clearTimeout(backupTimer);
-    // Create final backup before shutdown
     try {
       await createBackup("shutdown");
       console.log("Backup final criado com sucesso");
@@ -1415,12 +1436,10 @@ async function shutdown(signal) {
   }
 }
 
-// Register shutdown handlers
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 
 start().catch((err) => {
   console.error("Falha ao iniciar backend:", err);
   process.exit(1);
 });
-

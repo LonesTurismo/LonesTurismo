@@ -142,6 +142,29 @@ function clearFileInputUI(input) {
   updateFileInputUI(input);
 }
 
+// ==================== PERSISTÊNCIA DE LINHAS ====================
+function getTripRowsStorageKey(tripId) {
+  return `tripVisibleRows:${tripId}`;
+}
+
+function saveTripVisibleRows(tripId, rows) {
+  if (!tripId) return;
+  const safeRows = Math.max(INITIAL_PASSENGERS, Math.min(MAX_PASSENGERS, Number(rows) || INITIAL_PASSENGERS));
+  localStorage.setItem(getTripRowsStorageKey(tripId), String(safeRows));
+}
+
+function getTripVisibleRows(tripId) {
+  if (!tripId) return null;
+  const saved = Number(localStorage.getItem(getTripRowsStorageKey(tripId)));
+  if (!saved) return null;
+  return Math.max(INITIAL_PASSENGERS, Math.min(MAX_PASSENGERS, saved));
+}
+
+function clearTripVisibleRows(tripId) {
+  if (!tripId) return;
+  localStorage.removeItem(getTripRowsStorageKey(tripId));
+}
+
 // ==================== API ====================
 const api = {
   async request(ep, method = "GET", body = null, admin = false) {
@@ -336,10 +359,15 @@ function updateAddMoreRowsButton() {
   }
 }
 
-function getRowsToRender(existingPassengers = []) {
+function getRowsToRender(existingPassengers = [], tripId = null) {
   const existingCount = Array.isArray(existingPassengers) ? existingPassengers.length : 0;
+  const savedRows = getTripVisibleRows(tripId) || 0;
   const currentCount = Number(publicState.visibleRows) || INITIAL_PASSENGERS;
-  return Math.min(MAX_PASSENGERS, Math.max(INITIAL_PASSENGERS, currentCount, existingCount));
+
+  return Math.min(
+    MAX_PASSENGERS,
+    Math.max(INITIAL_PASSENGERS, currentCount, existingCount, savedRows)
+  );
 }
 
 function buildPassengerRow(index, passenger = {}) {
@@ -393,15 +421,19 @@ function buildPassengerRow(index, passenger = {}) {
   `;
 }
 
-function renderPassengerRows(existingPassengers = []) {
+function renderPassengerRows(existingPassengers = [], tripId = null) {
   const tbody = $("#passengerRows");
   if (!tbody) return;
 
-  publicState.visibleRows = getRowsToRender(existingPassengers);
+  publicState.visibleRows = getRowsToRender(existingPassengers, tripId);
   tbody.innerHTML = "";
 
   for (let i = 0; i < publicState.visibleRows; i++) {
     tbody.insertAdjacentHTML("beforeend", buildPassengerRow(i, existingPassengers[i] || {}));
+  }
+
+  if (tripId) {
+    saveTripVisibleRows(tripId, publicState.visibleRows);
   }
 
   updateFilledCount();
@@ -424,6 +456,12 @@ function addMorePassengerRows() {
   }
 
   publicState.visibleRows = nextTotal;
+
+  const { tripId } = getTripSession();
+  if (tripId) {
+    saveTripVisibleRows(tripId, publicState.visibleRows);
+  }
+
   updateFilledCount();
   updateAddMoreRowsButton();
 }
@@ -591,12 +629,14 @@ async function createTrip() {
     const data = await api.post("/api/trips", { destination, dateIso, responsible });
 
     setTripSession(data.trip.id, data.pin);
+    saveTripVisibleRows(data.trip.id, INITIAL_PASSENGERS);
+
     publicState.currentTrip = data.trip;
     publicState.currentPassengers = [];
     publicState.visibleRows = INITIAL_PASSENGERS;
 
     setTripInfo(data.trip, data.pin);
-    renderPassengerRows([]);
+    renderPassengerRows([], data.trip.id);
     showTripEditor();
 
     const editor = $("#tripEditor");
@@ -623,13 +663,11 @@ async function loadTripData(tripId, pin) {
   setTripSession(tripId, pin);
   publicState.currentTrip = data.trip;
   publicState.currentPassengers = data.passengers || [];
-  publicState.visibleRows = Math.min(
-    MAX_PASSENGERS,
-    Math.max(INITIAL_PASSENGERS, (data.passengers || []).length)
-  );
+
+  publicState.visibleRows = getRowsToRender(data.passengers || [], tripId);
 
   setTripInfo(data.trip, pin);
-  renderPassengerRows(publicState.currentPassengers);
+  renderPassengerRows(publicState.currentPassengers, tripId);
   showTripEditor();
 
   if (window.__enableActionButtons) {
@@ -701,6 +739,7 @@ async function savePassengerRows() {
       await saveSingleRow(row, { silent: true, trigger: "manual" });
     }
 
+    saveTripVisibleRows(tripId, publicState.visibleRows);
     await loadTripData(tripId, tripPin);
     showToast("Lista salva com sucesso!", "success");
   } catch (e) {
@@ -1129,6 +1168,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!confirmed) return;
 
       try {
+        clearTripVisibleRows(state.selectedTripId);
         await api.del(`/api/admin/trips/${state.selectedTripId}`, null, true);
         showToast("Viagem apagada com sucesso!", "success");
         state.selectedTripId = null;

@@ -29,7 +29,7 @@ body {
   background:
     radial-gradient(900px 500px at 15% 10%, rgba(0, 150, 255, 0.18), transparent 60%),
     radial-gradient(800px 500px at 85% 15%, rgba(0, 255, 180, 0.12), transparent 55%),
-    radial-gradient(700px 420px at 50% 100%, rgba(37, 99, 235, 0.10), transparent 60%),
+    radial-gradient(700px 420px at 50% 100%, rgba(37, 99, 235, 0.1), transparent 60%),
     var(--bg);
   color: var(--text);
   position: relative;
@@ -49,6 +49,10 @@ body::before {
 img {
   max-width: 100%;
   display: block;
+}
+
+a {
+  text-decoration: none;
 }
 
 /* Layout base */
@@ -100,10 +104,6 @@ img {
   margin-top: 10px;
 }
 
-a {
-  text-decoration: none;
-}
-
 /* Topbar */
 .topbar {
   background: rgba(11, 18, 32, 0.72);
@@ -114,6 +114,9 @@ a {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 999;
 }
 
 .brand {
@@ -151,8 +154,8 @@ a {
   text-decoration: none;
   color: var(--text);
   font-weight: 800;
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
   transition: background 0.2s ease, transform 0.2s ease;
 }
 
@@ -357,6 +360,11 @@ select:-webkit-autofill {
   border-color: transparent;
 }
 
+.btn.secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
 .btn:disabled,
 .btn.disabled,
 .btn[disabled],
@@ -518,7 +526,7 @@ select:-webkit-autofill {
   gap: 10px;
 }
 
-/* ===== NOVOS CARDS DE PACOTES ===== */
+/* ===== PACOTES ===== */
 .packages-section {
   padding-top: 34px;
 }
@@ -541,62 +549,51 @@ select:-webkit-autofill {
 
 .travel-cards {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 22px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
 }
 
 .travel-card {
-  position: relative;
-  min-height: 500px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
   border-radius: 24px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
   box-shadow: 0 22px 60px rgba(0, 0, 0, 0.38);
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  display: flex;
-  align-items: flex-end;
-  isolation: isolate;
+  backdrop-filter: blur(10px);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.travel-card.aparecida {
-  background-image: url("/img/aparecida.jpg");
+.travel-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.42);
 }
 
-.travel-card.caldas {
-  background-image: url("/img/caldas-novas.jpg");
+.travel-card-image {
+  position: relative;
+  width: 100%;
+  height: 240px;
+  overflow: hidden;
 }
 
-.travel-card.campos {
-  background-image: url("/img/campos-jordao.jpg");
-}
-
-.travel-card-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background:
-    linear-gradient(
-      180deg,
-      rgba(0, 0, 0, 0.04) 0%,
-      rgba(0, 0, 0, 0.10) 18%,
-      rgba(0, 0, 0, 0.26) 45%,
-      rgba(2, 8, 20, 0.72) 75%,
-      rgba(2, 8, 20, 0.96) 100%
-    );
+.travel-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .travel-card-price {
   position: absolute;
-  top: 18px;
-  right: 18px;
-  z-index: 3;
-  background: rgba(18, 24, 38, 0.82);
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+  background: rgba(18, 24, 38, 0.84);
   color: #fff;
-  padding: 12px 22px;
-  border-radius: 18px;
-  font-size: clamp(22px, 2vw, 30px);
+  padding: 12px 18px;
+  border-radius: 16px;
+  font-size: clamp(20px, 1.6vw, 28px);
   font-weight: 900;
   line-height: 1;
   backdrop-filter: blur(8px);
@@ -604,39 +601,37 @@ select:-webkit-autofill {
 }
 
 .travel-card-content {
-  position: relative;
-  z-index: 3;
-  width: 100%;
-  padding: 0 24px 24px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 22px;
 }
 
 .travel-card-content h3 {
   margin: 0 0 12px;
-  color: #fff;
-  font-size: clamp(22px, 1.8vw, 32px);
+  color: var(--text);
+  font-size: clamp(22px, 1.8vw, 30px);
   line-height: 1.12;
   font-weight: 900;
   letter-spacing: -0.5px;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
 }
 
 .travel-card-content p {
   margin: 0 0 22px;
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--muted);
   font-size: clamp(14px, 1vw, 17px);
-  line-height: 1.5;
-  max-width: 95%;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+  line-height: 1.55;
+  flex: 1;
 }
 
 .travel-card-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 158px;
-  min-height: 54px;
-  padding: 0 24px;
-  border-radius: 999px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 20px;
+  border-radius: 14px;
   background: linear-gradient(135deg, #2563eb, #3b82f6);
   color: #fff;
   text-decoration: none;
@@ -651,7 +646,18 @@ select:-webkit-autofill {
   box-shadow: 0 16px 34px rgba(37, 99, 235, 0.5);
 }
 
-/* ===== FROTA MAIS ATRATIVA ===== */
+/* Classes antigas neutralizadas */
+.travel-card.aparecida,
+.travel-card.caldas,
+.travel-card.campos {
+  background-image: none;
+}
+
+.travel-card-overlay {
+  display: none;
+}
+
+/* ===== FROTA ===== */
 .fleet-section {
   padding: 52px 0;
 }
@@ -677,7 +683,7 @@ select:-webkit-autofill {
 
 .fleet-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 24px;
 }
 
@@ -734,7 +740,7 @@ select:-webkit-autofill {
   color: var(--text);
 }
 
-/* ===== CONTATO DESTACADO ===== */
+/* ===== CONTATO ===== */
 .contact-section {
   padding: 52px 0 26px;
 }
@@ -789,20 +795,24 @@ select:-webkit-autofill {
   color: var(--muted);
 }
 
-/* ===== RODAPÉ MAIS COMPLETO ===== */
+/* ===== RODAPÉ MAIS HOMOGÊNEO ===== */
 .site-footer {
   margin-top: 56px;
   border-top: 1px solid var(--border);
-  background:
-    linear-gradient(180deg, rgba(4, 10, 22, 0.94), rgba(2, 6, 16, 0.98));
+  background: linear-gradient(180deg, rgba(4, 10, 22, 0.94), rgba(2, 6, 16, 0.98));
   color: var(--muted);
 }
 
 .footer-grid {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr 1.1fr;
+  grid-template-columns: 1.2fr 1fr 1fr;
   gap: 28px;
   padding: 42px 0 30px;
+  align-items: start;
+}
+
+.footer-col {
+  min-height: 160px;
 }
 
 .footer-col h3,
@@ -1017,37 +1027,34 @@ select:-webkit-autofill {
     font-size: 42px !important;
   }
 
-  .travel-card {
-    min-height: 460px;
-    border-radius: 22px;
+  .travel-card-image {
+    height: 220px;
   }
 
   .travel-card-price {
     top: 16px;
     right: 16px;
-    padding: 12px 18px;
-    font-size: 24px;
-    border-radius: 16px;
+    padding: 12px 16px;
+    font-size: 22px;
+    border-radius: 14px;
   }
 
   .travel-card-content {
-    padding: 0 20px 20px;
+    padding: 20px;
   }
 
   .travel-card-content h3 {
-    font-size: 28px;
+    font-size: 26px;
   }
 
   .travel-card-content p {
     font-size: 16px;
-    max-width: 100%;
   }
 
   .travel-card-btn {
-    min-height: 52px;
-    min-width: 148px;
+    min-height: 50px;
     font-size: 16px;
-    padding: 0 22px;
+    padding: 0 20px;
   }
 
   .contact-box {
@@ -1073,8 +1080,8 @@ select:-webkit-autofill {
     font-size: 16px;
   }
 
-  .travel-card {
-    min-height: 400px;
+  .travel-card-image {
+    height: 200px;
   }
 
   .travel-card-content h3 {
@@ -1087,7 +1094,8 @@ select:-webkit-autofill {
   }
 
   .travel-card-price {
-    font-size: 20px;
+    font-size: 18px;
+    padding: 10px 14px;
   }
 
   .hero-card {
@@ -1100,6 +1108,10 @@ select:-webkit-autofill {
 
   .footer-grid {
     grid-template-columns: 1fr;
+  }
+
+  .footer-col {
+    min-height: auto;
   }
 
   .contact-actions {

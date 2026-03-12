@@ -149,7 +149,10 @@ function getTripRowsStorageKey(tripId) {
 
 function saveTripVisibleRows(tripId, rows) {
   if (!tripId) return;
-  const safeRows = Math.max(INITIAL_PASSENGERS, Math.min(MAX_PASSENGERS, Number(rows) || INITIAL_PASSENGERS));
+  const safeRows = Math.max(
+    INITIAL_PASSENGERS,
+    Math.min(MAX_PASSENGERS, Number(rows) || INITIAL_PASSENGERS)
+  );
   localStorage.setItem(getTripRowsStorageKey(tripId), String(safeRows));
 }
 
@@ -160,22 +163,23 @@ function getTripVisibleRows(tripId) {
   return Math.max(INITIAL_PASSENGERS, Math.min(MAX_PASSENGERS, saved));
 }
 
-function clearTripVisibleRows(tripId) {
-  if (!tripId) return;
-  localStorage.removeItem(getTripRowsStorageKey(tripId));
-}
-
 const ADMIN_SESSION_KEY = "adminSessionStartedAt";
+const ADMIN_TOKEN_KEY = "adminToken";
 const ADMIN_SESSION_DURATION_MS = 60 * 60 * 1000;
 
 function setAdminSession(token) {
   if (!token) return;
-  localStorage.setItem("adminToken", token);
+  localStorage.setItem(ADMIN_TOKEN_KEY, token);
   localStorage.setItem(ADMIN_SESSION_KEY, String(Date.now()));
 }
 
+function clearAdminSession() {
+  localStorage.removeItem(ADMIN_TOKEN_KEY);
+  localStorage.removeItem(ADMIN_SESSION_KEY);
+}
+
 function getAdminToken() {
-  const token = localStorage.getItem("adminToken");
+  const token = localStorage.getItem(ADMIN_TOKEN_KEY);
   const startedAt = Number(localStorage.getItem(ADMIN_SESSION_KEY) || 0);
 
   if (!token || !startedAt) {
@@ -190,11 +194,6 @@ function getAdminToken() {
   }
 
   return token;
-}
-
-function clearAdminSession() {
-  localStorage.removeItem("adminToken");
-  localStorage.removeItem(ADMIN_SESSION_KEY);
 }
 
 function ensureAdminSessionAlive() {
@@ -231,17 +230,6 @@ function authHeaders(extra = {}) {
   };
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  fetch(`${API}/health`).catch(() => {});
-
-  initMasks();
-  initFileInputs();
-  initCadastroPage();
-  initEditarPage();
-  initAdminPage();
-  initPainelPage();
-});
-
 // ==================== INPUT MASKS ====================
 function initMasks() {
   document.addEventListener("input", (e) => {
@@ -262,18 +250,22 @@ function initMasks() {
 function initFileInputs() {
   $$("input[type='file']").forEach((input) => {
     updateFileInputUI(input);
-
     input.addEventListener("change", () => {
       updateFileInputUI(input);
     });
   });
 }
 
-// ==================== ESTADO GLOBAL PÚBLICO ====================
+// ==================== ESTADO GLOBAL ====================
 const publicState = {
   currentTrip: null,
   currentPassengers: [],
   visibleRows: INITIAL_PASSENGERS
+};
+
+const painelState = {
+  trips: [],
+  selectedTrip: null
 };
 
 // ==================== RENDER DE PASSAGEIROS ====================
@@ -343,7 +335,10 @@ function renderPassengerRows(tbody, passengers = [], visibleRows = INITIAL_PASSE
   if (!tbody) return;
 
   const rows = [];
-  const safeVisibleRows = Math.max(INITIAL_PASSENGERS, Math.min(MAX_PASSENGERS, Number(visibleRows) || INITIAL_PASSENGERS));
+  const safeVisibleRows = Math.max(
+    INITIAL_PASSENGERS,
+    Math.min(MAX_PASSENGERS, Number(visibleRows) || INITIAL_PASSENGERS)
+  );
 
   for (let i = 0; i < safeVisibleRows; i += 1) {
     rows.push(buildPassengerRow(passengers[i], i, mode));
@@ -382,6 +377,66 @@ function getPassengerPayloadFromRow(row) {
   };
 }
 
+// ==================== API PÚBLICA ====================
+async function createTrip(payload) {
+  const { response, data } = await fetchJson(`${API}/api/trips`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error(data.error || "Não foi possível criar a lista.");
+  }
+
+  return data.trip;
+}
+
+async function verifyTripPin(tripId, pin) {
+  const { response, data } = await fetchJson(`${API}/api/trips/${tripId}/verify-pin`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ pin })
+  });
+
+  if (!response.ok) {
+    throw new Error(data.error || "ID ou PIN inválido.");
+  }
+
+  return data.trip;
+}
+
+async function fetchPassengers(tripId, pin) {
+  const { response, data } = await fetchJson(`${API}/api/trips/${tripId}?pin=${encodeURIComponent(pin)}`);
+
+  if (!response.ok) {
+    throw new Error(data.error || "Não foi possível carregar os passageiros.");
+  }
+
+  return data.passengers || [];
+}
+
+async function updateVisibleRows(tripId, pin, visibleRows) {
+  const { response, data } = await fetchJson(`${API}/api/trips/${tripId}/visible-rows`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ pin, visibleRows })
+  });
+
+  if (!response.ok) {
+    throw new Error(data.error || "Não foi possível atualizar a quantidade de linhas.");
+  }
+
+  return data.visibleRows;
+}
+
+// ==================== PASSAGEIROS EVENTOS ====================
 function attachPassengerRowEvents(scope = document) {
   scope.addEventListener("blur", async (e) => {
     const target = e.target;
@@ -395,21 +450,14 @@ function attachPassengerRowEvents(scope = document) {
       const row = target.closest(".passenger-row");
       if (!row) return;
 
-      const pageIsCadastro = Boolean($("#createTripForm"));
       const trip = publicState.currentTrip;
-
       if (!trip?.id || !trip?.pin) return;
 
       const payload = getPassengerPayloadFromRow(row);
       updateFilledCount();
 
-      if (!payload.name && !payload.cpf) {
-        return;
-      }
-
-      if (!payload.name || payload.cpf.length !== 11) {
-        return;
-      }
+      if (!payload.name && !payload.cpf) return;
+      if (!payload.name || payload.cpf.length !== 11) return;
 
       try {
         const endpoint = payload.id
@@ -444,9 +492,7 @@ function attachPassengerRowEvents(scope = document) {
           }
         }
 
-        if (pageIsCadastro || $("#editArea")) {
-          publicState.currentPassengers = await fetchPassengers(trip.id, trip.pin);
-        }
+        publicState.currentPassengers = await fetchPassengers(trip.id, trip.pin);
       } catch (err) {
         showToast(err.message || "Erro ao salvar passageiro.", "error");
       }
@@ -540,67 +586,6 @@ function attachPassengerRowEvents(scope = document) {
       }
     }
   });
-}
-
-attachPassengerRowEvents(document);
-
-// ==================== API PÚBLICA ====================
-async function createTrip(payload) {
-  const { response, data } = await fetchJson(`${API}/api/trips`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(payload)
-  });
-
-  if (!response.ok) {
-    throw new Error(data.error || "Não foi possível criar a lista.");
-  }
-
-  return data.trip;
-}
-
-async function verifyTripPin(tripId, pin) {
-  const { response, data } = await fetchJson(`${API}/api/trips/${tripId}/verify-pin`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ pin })
-  });
-
-  if (!response.ok) {
-    throw new Error(data.error || "ID ou PIN inválido.");
-  }
-
-  return data.trip;
-}
-
-async function fetchPassengers(tripId, pin) {
-  const { response, data } = await fetchJson(`${API}/api/trips/${tripId}?pin=${encodeURIComponent(pin)}`);
-
-  if (!response.ok) {
-    throw new Error(data.error || "Não foi possível carregar os passageiros.");
-  }
-
-  return data.passengers || [];
-}
-
-async function updateVisibleRows(tripId, pin, visibleRows) {
-  const { response, data } = await fetchJson(`${API}/api/trips/${tripId}/visible-rows`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ pin, visibleRows })
-  });
-
-  if (!response.ok) {
-    throw new Error(data.error || "Não foi possível atualizar a quantidade de linhas.");
-  }
-
-  return data.visibleRows;
 }
 
 // ==================== CADASTRO ====================
@@ -726,7 +711,7 @@ async function handleCreateTrip(e) {
 async function handleAddRows() {
   const trip = publicState.currentTrip;
   if (!trip?.id || !trip?.pin) {
-    showToast("Crie uma lista antes de adicionar mais passageiros.", "warning");
+    showToast("Crie ou abra uma lista antes de adicionar mais passageiros.", "warning");
     return;
   }
 
@@ -795,17 +780,8 @@ function fillEditTripInfo(trip) {
   }
 }
 
-async function handleOpenEditTrip(e) {
-  e.preventDefault();
-
-  const form = e.currentTarget;
-  const btn = form.querySelector("button[type='submit']");
-  const tripId = $("#editTripId")?.value?.trim();
-  const pin = $("#editTripPin")?.value?.trim();
-
+async function openEditTripByCredentials(tripId, pin, showMessages = true) {
   try {
-    setLoading(btn, true, "Abrindo lista...");
-
     const trip = await verifyTripPin(tripId, pin);
     const savedRows = getTripVisibleRows(trip.id);
 
@@ -821,10 +797,28 @@ async function handleOpenEditTrip(e) {
     renderPassengerRows(tbody, publicState.currentPassengers, publicState.visibleRows, "editar");
     updateFilledCount();
 
-    showToast("Lista carregada com sucesso.");
+    if (showMessages) {
+      showToast("Lista carregada com sucesso.");
+    }
   } catch (err) {
     hideTripEditor();
-    showToast(err.message || "Erro ao abrir lista.", "error");
+    if (showMessages) {
+      showToast(err.message || "Erro ao abrir lista.", "error");
+    }
+  }
+}
+
+async function handleOpenEditTrip(e) {
+  e.preventDefault();
+
+  const form = e.currentTarget;
+  const btn = form.querySelector("button[type='submit']");
+  const tripId = $("#editTripId")?.value?.trim();
+  const pin = $("#editTripPin")?.value?.trim();
+
+  try {
+    setLoading(btn, true, "Abrindo lista...");
+    await openEditTripByCredentials(tripId, pin, true);
   } finally {
     setLoading(btn, false);
   }
@@ -844,55 +838,119 @@ function initEditarPage() {
 }
 
 // ==================== ADMIN LOGIN ====================
-async function handleAdminLogin(e) {
-  e.preventDefault();
+function bindAdminLogin() {
+  const btn = $("#btnAdminLogin");
+  if (!btn) return;
 
-  const form = e.currentTarget;
-  const btn = form.querySelector("button[type='submit']");
-  const user = $("#adminUser")?.value?.trim();
-  const pass = $("#adminPass")?.value?.trim();
+  btn.addEventListener("click", async (e) => {
+    e.preventDefault();
 
-  try {
-    setLoading(btn, true, "Entrando...");
+    const user =
+      $("#admUser")?.value?.trim() ||
+      $("#adminUser")?.value?.trim() ||
+      "";
 
-    const { response, data } = await fetchJson(`${API}/api/admin/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ user, pass })
-    });
+    const pass =
+      $("#admPass")?.value?.trim() ||
+      $("#adminPass")?.value?.trim() ||
+      "";
 
-    if (!response.ok) {
-      throw new Error(data.error || "Usuário ou senha inválidos.");
+    const err = $("#admError") || $("#adminError");
+
+    if (err) err.textContent = "";
+
+    try {
+      setLoading(btn, true, "Entrando...");
+
+      const { response, data } = await fetchJson(`${API}/api/admin/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ user, pass })
+      });
+
+      if (!response.ok) {
+        throw new Error(data.error || "Usuário ou senha inválidos.");
+      }
+
+      setAdminSession(data.token);
+      showToast("Login realizado com sucesso.");
+
+      setTimeout(() => {
+        location.href = "/painel";
+      }, 400);
+    } catch (error) {
+      if (err) {
+        err.textContent = error.message || "Erro ao fazer login.";
+      } else {
+        showToast(error.message || "Erro ao fazer login.", "error");
+      }
+    } finally {
+      setLoading(btn, false);
     }
-
-    setAdminSession(data.token);
-    showToast("Login realizado com sucesso.");
-    setTimeout(() => {
-      location.href = "/painel";
-    }, 500);
-  } catch (err) {
-    showToast(err.message || "Erro ao fazer login.", "error");
-  } finally {
-    setLoading(btn, false);
-  }
+  });
 }
 
-function initAdminPage() {
+// fallback caso o admin use form em vez de botão direto
+function bindAdminLoginForm() {
   const form = $("#adminLoginForm");
   if (!form) return;
 
-  clearAdminSession();
-  form.addEventListener("submit", handleAdminLogin);
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const btn =
+      form.querySelector("button[type='submit']") ||
+      $("#btnAdminLogin");
+
+    const user =
+      $("#admUser")?.value?.trim() ||
+      $("#adminUser")?.value?.trim() ||
+      "";
+
+    const pass =
+      $("#admPass")?.value?.trim() ||
+      $("#adminPass")?.value?.trim() ||
+      "";
+
+    const err = $("#admError") || $("#adminError");
+    if (err) err.textContent = "";
+
+    try {
+      setLoading(btn, true, "Entrando...");
+
+      const { response, data } = await fetchJson(`${API}/api/admin/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ user, pass })
+      });
+
+      if (!response.ok) {
+        throw new Error(data.error || "Usuário ou senha inválidos.");
+      }
+
+      setAdminSession(data.token);
+      showToast("Login realizado com sucesso.");
+
+      setTimeout(() => {
+        location.href = "/painel";
+      }, 400);
+    } catch (error) {
+      if (err) {
+        err.textContent = error.message || "Erro ao fazer login.";
+      } else {
+        showToast(error.message || "Erro ao fazer login.", "error");
+      }
+    } finally {
+      setLoading(btn, false);
+    }
+  });
 }
 
 // ==================== PAINEL ADMIN ====================
-const painelState = {
-  trips: [],
-  selectedTrip: null
-};
-
 async function fetchAdminTrips() {
   const { response, data } = await fetchJson(`${API}/api/admin/trips`, {
     headers: authHeaders()
@@ -1131,7 +1189,10 @@ function bindPainelEvents() {
         return;
       }
 
-      window.open(`${API}/api/admin/trips/${encodeURIComponent(trip.id)}/export/zip?token=${encodeURIComponent(token)}`, "_blank");
+      window.open(
+        `${API}/api/admin/trips/${encodeURIComponent(trip.id)}/export/zip?token=${encodeURIComponent(token)}`,
+        "_blank"
+      );
     });
   }
 
@@ -1150,6 +1211,7 @@ function schedulePainelAutoLogout() {
   if (!startedAt) return;
 
   const remaining = ADMIN_SESSION_DURATION_MS - (Date.now() - startedAt);
+
   if (remaining <= 0) {
     clearAdminSession();
     showToast("Sua sessão expirou. Faça login novamente.", "warning");
@@ -1200,7 +1262,7 @@ async function initPainelPage() {
 }
 
 // ==================== AUTOLOAD EDIÇÃO VIA QUERY/SESSION ====================
-document.addEventListener("DOMContentLoaded", async () => {
+async function tryAutoLoadEditTrip() {
   const editForm = $("#editTripAccessForm");
   if (!editForm) return;
 
@@ -1219,22 +1281,23 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (tripIdInput) tripIdInput.value = tripId;
   if (tripPinInput) tripPinInput.value = pin;
 
-  try {
-    const trip = await verifyTripPin(tripId, pin);
-    const savedRows = getTripVisibleRows(trip.id);
+  await openEditTripByCredentials(tripId, pin, false);
+}
 
-    setTripSession(trip.id, pin);
-    publicState.currentTrip = { ...trip, pin };
-    publicState.visibleRows = savedRows || trip.visibleRows || INITIAL_PASSENGERS;
-    publicState.currentPassengers = await fetchPassengers(trip.id, pin);
+// ==================== INIT GERAL ====================
+document.addEventListener("DOMContentLoaded", async () => {
+  fetch(`${API}/health`).catch(() => {});
 
-    fillEditTripInfo(trip);
-    showTripEditor();
+  initMasks();
+  initFileInputs();
+  attachPassengerRowEvents(document);
 
-    const tbody = $("#editPassengerRows");
-    renderPassengerRows(tbody, publicState.currentPassengers, publicState.visibleRows, "editar");
-    updateFilledCount();
-  } catch (err) {
-    clearTripSession();
-  }
+  initCadastroPage();
+  initEditarPage();
+
+  bindAdminLogin();
+  bindAdminLoginForm();
+
+  await tryAutoLoadEditTrip();
+  await initPainelPage();
 });

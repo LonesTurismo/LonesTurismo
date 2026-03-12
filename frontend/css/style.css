@@ -521,6 +521,7 @@ select:-webkit-autofill {
     height: 48px;
   }
 }
+
 /* ===== Tabela da lista de passageiros ===== */
 .table-wrap {
   width: 100%;
@@ -545,7 +546,7 @@ select:-webkit-autofill {
 
 .list-table tbody td {
   padding: 0 10px;
-  vertical-align: middle;
+  vertical-align: top;
 }
 
 .list-table th:nth-child(1),
@@ -568,23 +569,15 @@ select:-webkit-autofill {
   width: 220px;
 }
 
-/* Arquivo ocupa o espaço sobrando */
 .list-table th:nth-child(5),
 .list-table td:nth-child(5) {
   width: auto;
   min-width: 360px;
 }
 
-/* Anexo atual menor */
 .list-table th:nth-child(6),
 .list-table td:nth-child(6) {
-  width: 140px;
-}
-
-/* Remover anexo exatamente sobre os botões */
-.list-table th:nth-child(7),
-.list-table td:nth-child(7) {
-  width: 140px;
+  width: 150px;
   text-align: center;
 }
 
@@ -595,25 +588,60 @@ select:-webkit-autofill {
   min-width: 0;
 }
 
-.list-table td input[type="file"] {
-  width: 100%;
-  min-width: 0;
-}
-
 .list-table td .btn.danger,
 .list-table td button.btn.danger {
   width: 100%;
   justify-content: center;
 }
 
-.list-table td:nth-child(6) {
-  white-space: nowrap;
+/* Upload customizado */
+.file-upload {
+  width: 100%;
+}
+
+.file-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  border-radius: 12px;
+  background: #ffffff;
+  color: var(--text-dark);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  overflow: hidden;
+  text-align: center;
+}
+
+.file-upload-btn:hover {
+  border-color: #94a3b8;
+}
+
+.file-upload-btn input[type="file"] {
+  display: none;
+}
+
+.file-upload-text {
+  display: block;
+  width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-names {
+  margin-top: 6px;
+  line-height: 1.35;
+  word-break: break-word;
+  white-space: normal;
 }
 
 @media (max-width: 920px) {
   .list-table {
-    min-width: 1200px;
+    min-width: 1080px;
   }
 }

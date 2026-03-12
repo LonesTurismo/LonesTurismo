@@ -109,6 +109,41 @@ function showToast(message, type = "success") {
   }, 2600);
 }
 
+function getSelectedFileNames(files) {
+  if (!files?.length) return [];
+  return [...files].map((file) => file.name);
+}
+
+function updateFileInputUI(input) {
+  if (!input) return;
+
+  const wrapper = input.closest(".file-upload");
+  if (!wrapper) return;
+
+  const buttonText = wrapper.querySelector(".file-upload-text");
+  const namesBox = wrapper.querySelector(".file-names");
+
+  const names = getSelectedFileNames(input.files);
+
+  if (buttonText) {
+    buttonText.textContent = names.length
+      ? (names.length === 1 ? names[0] : `${names.length} arquivos selecionados`)
+      : "Escolher arquivos";
+  }
+
+  if (namesBox) {
+    namesBox.textContent = names.length ? names.join(", ") : "";
+    namesBox.style.display = names.length ? "block" : "none";
+    namesBox.title = names.length ? names.join(", ") : "";
+  }
+}
+
+function clearFileInputUI(input) {
+  if (!input) return;
+  input.value = "";
+  updateFileInputUI(input);
+}
+
 // ==================== API ====================
 const api = {
   async request(ep, method = "GET", body = null, admin = false) {
@@ -310,8 +345,6 @@ function getRowsToRender(existingPassengers = []) {
 }
 
 function buildPassengerRow(index, passenger = {}) {
-  const docsCount = Array.isArray(passenger.documents) ? passenger.documents.length : 0;
-
   return `
     <tr data-index="${index}" data-passenger-id="${sanitize(passenger.id || "")}">
       <td>${index + 1}</td>
@@ -343,15 +376,18 @@ function buildPassengerRow(index, passenger = {}) {
         >
       </td>
       <td>
-        <input
-          type="file"
-          class="row-file"
-          accept=".jpg,.jpeg,.png,.pdf"
-          multiple
-        >
-      </td>
-      <td class="small row-current-files">
-        ${docsCount ? `${docsCount} anexo(s)` : "-"}
+        <div class="file-upload">
+          <label class="file-upload-btn">
+            <span class="file-upload-text">Escolher arquivos</span>
+            <input
+              type="file"
+              class="row-file"
+              accept=".jpg,.jpeg,.png,.pdf"
+              multiple
+            >
+          </label>
+          <div class="small file-names" style="display:none;"></div>
+        </div>
       </td>
       <td>
         <button type="button" class="btn danger btn-remove-local-file">Remover</button>
@@ -463,14 +499,13 @@ async function saveSingleRow(row, options = {}) {
   }
 
   const rowData = getRowData(row);
-  const currentFilesCell = row.querySelector(".row-current-files");
   const fileInput = row.querySelector(".row-file");
 
   if (isRowEmpty(rowData)) {
     if (rowData.passengerId) {
       await api.del(`/api/trips/${tripId}/passengers/${rowData.passengerId}`, { pin: tripPin });
       row.dataset.passengerId = "";
-      if (currentFilesCell) currentFilesCell.textContent = "-";
+      clearFileInputUI(fileInput);
       if (!silent) showToast("Linha removida da lista", "success");
     }
     updateFilledCount();
@@ -497,8 +532,7 @@ async function saveSingleRow(row, options = {}) {
 
     if (rowData.files?.length) {
       await uploadDocs(tripId, rowData.passengerId, tripPin, rowData.files);
-      if (currentFilesCell) currentFilesCell.textContent = `${rowData.files.length} anexo(s) enviado(s)`;
-      if (fileInput) fileInput.value = "";
+      clearFileInputUI(fileInput);
     }
 
     if (!silent) {
@@ -528,8 +562,7 @@ async function saveSingleRow(row, options = {}) {
   }
 
   if (rowData.files?.length) {
-    if (currentFilesCell) currentFilesCell.textContent = `${rowData.files.length} anexo(s) enviado(s)`;
-    if (fileInput) fileInput.value = "";
+    clearFileInputUI(fileInput);
   }
 
   if (!silent) {
@@ -655,6 +688,7 @@ async function savePassengerRows() {
         if (rowData.passengerId) {
           await api.del(`/api/trips/${tripId}/passengers/${rowData.passengerId}`, { pin: tripPin });
           row.dataset.passengerId = "";
+          clearFileInputUI(row.querySelector(".row-file"));
         }
         continue;
       }
@@ -780,6 +814,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         e.target.id === "responsible"
       ) {
         validateCreateForm();
+      }
+    });
+
+    document.addEventListener("change", (e) => {
+      if (e.target.classList.contains("row-file")) {
+        updateFileInputUI(e.target);
       }
     });
 
@@ -922,13 +962,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const row = btn.closest("tr");
       const fileInput = row?.querySelector(".row-file");
-      const currentFilesCell = row?.querySelector(".row-current-files");
 
-      if (fileInput) fileInput.value = "";
-      if (currentFilesCell && !row?.dataset.passengerId) {
-        currentFilesCell.textContent = "-";
-      }
-
+      clearFileInputUI(fileInput);
       showToast("Anexo local removido da linha", "success");
     });
   }

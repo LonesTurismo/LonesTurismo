@@ -121,21 +121,19 @@ function updateFileInputUI(input) {
   if (!wrapper) return;
 
   const buttonText = wrapper.querySelector(".file-upload-text");
-  const namesBox = wrapper.querySelector(".file-names");
-
   const names = getSelectedFileNames(input.files);
 
-  if (buttonText) {
-    buttonText.textContent = names.length
-      ? (names.length === 1 ? names[0] : `${names.length} arquivos selecionados`)
-      : "Escolher arquivos";
+  if (!buttonText) return;
+
+  if (!names.length) {
+    buttonText.textContent = "Escolher arquivos";
+    buttonText.title = "";
+    return;
   }
 
-  if (namesBox) {
-    namesBox.textContent = names.length ? names.join(", ") : "";
-    namesBox.style.display = names.length ? "block" : "none";
-    namesBox.title = names.length ? names.join(", ") : "";
-  }
+  const fullText = names.join(", ");
+  buttonText.textContent = fullText;
+  buttonText.title = fullText;
 }
 
 function clearFileInputUI(input) {
@@ -386,7 +384,6 @@ function buildPassengerRow(index, passenger = {}) {
               multiple
             >
           </label>
-          <div class="small file-names" style="display:none;"></div>
         </div>
       </td>
       <td>
